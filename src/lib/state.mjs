@@ -4,7 +4,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { projectRoot } from "./env.mjs";
-import { matchesItem } from "./filter.mjs";
+import { matchesItem, targetKey } from "./filter.mjs";
 
 const dataDir = join(projectRoot, "data");
 const statePath = join(dataDir, "seen.json");
@@ -115,9 +115,34 @@ export function appendJobs(items) {
   withLock(() => {
     const existing = loadJobs();
     const have = new Set(existing.map((v) => `${v.source}:${v.id}`));
-    const fresh = items
-      .filter((v) => !have.has(`${v.source}:${v.id}`))
-      .map((v) => ({ ...v, collectedAt }));
+    // Дедуп по source:id ловит только повтор из ТОГО ЖЕ источника. Одна вакансия
+    // приходит и из телеграм-поста, и из прямого источника — id у них разные, и
+    // без проверки по ссылке в ленте появлялись две карточки на одну вакансию.
+    // dedupeByTarget этот случай закрывает только ВНУТРИ прогона: если телега
+    // принесла её вчера, а hh отдал сегодня, там сравнивать не с чем.
+    const byTarget = new Map();
+    for (const v of existing) {
+      const k = targetKey(v);
+      if (k) byTarget.set(k, v);
+    }
+    const fresh = [];
+    for (const v of items) {
+      if (have.has(`${v.source}:${v.id}`)) continue;
+      const k = targetKey(v);
+      const twin = k && byTarget.get(k);
+      if (twin) {
+        // Статус — это трекинг пользователя (отклик, письмо, скрытие): такую
+        // запись не трогаем и вторую карточку не заводим. Иначе действует то же
+        // правило, что в dedupeByTarget: прямой источник вытесняет телеграм.
+        if (!twin.status && twin.source === "telegram" && v.source !== "telegram") {
+          Object.assign(twin, v, { collectedAt: twin.collectedAt });
+        }
+        continue;
+      }
+      const rec = { ...v, collectedAt };
+      if (k) byTarget.set(k, rec);
+      fresh.push(rec);
+    }
     let merged = [...fresh, ...existing];
     if (merged.length > JOBS_CAP) {
       const tracked = merged.filter((j) => j.status).length;
