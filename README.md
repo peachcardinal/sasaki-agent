@@ -8,7 +8,7 @@
 откликов никуда не уходят и никому не видны.
 
 ```bash
-git clone git@github.com:peachcardinal/sasaki-agent.git
+git clone https://github.com/peachcardinal/sasaki-agent.git
 cd sasaki-agent
 npm run setup
 ```
