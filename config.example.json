@@ -22,7 +22,7 @@
     "finder": true,
     "telegram": true,
     "linkedin": true,
-    "hh": false,
+    "hh": true,
     "alfa": true,
     "avito": true,
     "2gis": true,

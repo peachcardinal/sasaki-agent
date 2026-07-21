@@ -132,18 +132,6 @@
   .opt input[type="radio"]:checked { border: 4.5px solid var(--accent); }
   .opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* источник без ключа: приглушён, вместо клика по галочке — ссылка на доки.
-     Отступ подсказки = ширина чекбокса (15px) + gap строки (8px). */
-  .src-locked .opt { opacity: .5; cursor: default; }
-  .src-locked .opt input[type="checkbox"] { cursor: default; }
-  .src-locked .opt input[type="checkbox"]:hover { border-color: var(--line); }
-  a.src-hint {
-    display: block; margin: -2px 0 6px 23px; font-size: 11px;
-    color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--line);
-    width: fit-content; max-width: 100%;
-  }
-  a.src-hint:hover { color: var(--fg); border-bottom-color: var(--muted); }
-
   /* --- уровни: строка с фильтром и вложенным списком слов --- */
   .lvl-row { display: flex; align-items: center; gap: 4px; }
   .lvl-row .opt { flex: 1; min-width: 0; }
@@ -743,10 +731,8 @@ $("onb-go").onclick = async () => {
 
 // --- источники --------------------------------------------------------------
 // Телеграм в общем списке не показываем — вместо него отдельные каналы.
-// linkedin/2gis скрыты и выключены в конфиге. hh показываем всегда: без токена
-// он с замком и подсказкой, иначе про самый крупный источник негде узнать.
+// linkedin/2gis скрыты и выключены в конфиге.
 const HIDDEN_SOURCES = new Set(["telegram", "linkedin", "2gis"]);
-const DOCS_URL = "https://github.com/peachcardinal/sasaki-agent/blob/main/docs/setup.md";
 // Агрегаторы отделены от карьерных сайтов компаний; всё, чего нет в списке,
 // считается сайтом компании.
 const AGGREGATORS = new Set(["getmatch", "habr", "hirehi", "finder", "designer.ru", "hh", "linkedin", "careerspace", "geekjob"]);
@@ -756,29 +742,9 @@ function renderSources() {
   const aggregators = $("src-aggregators"); aggregators.textContent = "";
   state.sources.filter((s) => !HIDDEN_SOURCES.has(s.name)).forEach((s) => {
     const box = AGGREGATORS.has(s.name) ? aggregators : companies;
-    if (s.needsEnv && !s.envReady) { box.append(lockedSource(s)); return; }
     box.append(optRow(s.name, s.enabled, (on) => { s.enabled = on; markDirty(); }));
   });
   renderTgChannels();
-}
-
-// Источник, которому не хватает ключа: галочка неактивна (включать нечего),
-// под ней — ссылка на инструкцию. Состояние показываем как в конфиге, не врём.
-function lockedSource(s) {
-  const wrap = document.createElement("div");
-  wrap.className = "src-locked";
-  const lab = optRow(s.name, s.enabled, () => {});
-  const cb = lab.querySelector("input");
-  cb.disabled = true;
-  lab.title = `нужен ${s.needsEnv} в .env`;
-  const hint = document.createElement("a");
-  hint.className = "src-hint";
-  hint.href = DOCS_URL;
-  hint.target = "_blank";
-  hint.rel = "noreferrer";
-  hint.textContent = `нужен ${s.needsEnv} — как получить`;
-  wrap.append(lab, hint);
-  return wrap;
 }
 
 function renderTgChannels() {
@@ -800,6 +766,9 @@ const hiddenFormats = new Set(
 );
 
 function workFormat(v) {
+  // источник честно сказал, что формата не знает (hh: в RSS только регион) —
+  // не выдумываем «офис» по названию города
+  if (v.formatUnknown) return "не указан";
   const s = (v.location || "").toLowerCase();
   if (/гибрид|hybrid/.test(s)) return "гибрид";
   if (/удал[её]н|remote|дистанц/.test(s)) return "удалённо";

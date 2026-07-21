@@ -88,6 +88,10 @@ function parseItems(xml) {
       url,
       salary: /не указан/i.test(salary) ? "" : salary,
       location: decode(field(desc, "Регион")),
+      // В ленте есть только регион, про удалёнку/гибрид она молчит. Без этого
+      // флага пульт вывел бы «офис» по одному названию города — и снятая
+      // галочка «офис» молча спрятала бы весь hh, включая удалённые вакансии.
+      formatUnknown: true,
       published: tag(block, "pubDate"),
     });
   }
