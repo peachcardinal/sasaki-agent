@@ -61,6 +61,14 @@ export async function runPipeline(cfg, { onLog = console.log } = {}) {
   );
   log(`Совпало с критериями и ещё не отправлялось: ${fresh.length}`);
 
+  // Архив ленты наполняем ВСЕМ, что подходит под текущие критерии, а не только
+  // недоставленным. Иначе так: вакансия пришла → попала в seen → пользователь
+  // сменил направление → протухание убрало её из ленты → вернул направление
+  // обратно, но seen считает её доставленной, и в ленту она уже не вернётся
+  // никогда. Доставка (уведомления) по-прежнему только по `fresh` — спама нет.
+  // appendJobs дедуплицирует по source:id, повторов не будет.
+  appendJobs(deduped);
+
   // --- доставка -------------------------------------------------------------
   if (fresh.length > 0) {
     const wanted = cfg.delivery?.channels?.length ? cfg.delivery.channels : ["markdown"];
@@ -95,7 +103,6 @@ export async function runPipeline(cfg, { onLog = console.log } = {}) {
         if (tk) seen.set(tk, now); // и тот же пост из другого канала
       }
       saveSeen(seen);
-      appendJobs(fresh); // архив для ленты в UI
     }
   } else if (errors.length && telegramConfigured()) {
     // вакансий нет, но были сбои источников — сообщим, чтобы не молчать при поломке
