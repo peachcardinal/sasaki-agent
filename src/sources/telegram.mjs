@@ -130,6 +130,8 @@ export function stripCompanyFromTitle(title, company) {
   const esc = company.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const cleaned = title
     .replace(new RegExp(`\\s+(?:в|у|от|для)\\s+«?${esc}»?\\s*$`, "i"), "")
+    // «Роль …, Компания» — вместе с запятой, иначе остаётся висячий хвост
+    .replace(new RegExp(`\\s*,\\s*«?${esc}»?\\s*$`, "i"), "")
     .replace(new RegExp(`\\s+«?${esc}»?\\s*$`, "i"), "")
     .trim();
   return cleaned.length >= 5 ? cleaned : title; // не оставляем огрызок
@@ -409,6 +411,18 @@ export function companyFrom(text) {
     if (cand.length <= 30 && cand.split(/\s+/).length <= 3
       && !/[()₽$€:;!?]|\d/.test(cand) && /^[A-ZА-ЯЁ«"]/.test(cand)) {
       candidates.push(cand);
+    }
+  }
+  // заголовок: «Роль …, КОМПАНИЯ» — компания последним сегментом после запятой
+  // («Продуктовый дизайнер (B2C) в Управление продуктов…, ВТБ»). Правило «Роль
+  // в X» ниже сюда не достаёт: оно запрещает запятые внутри имени. Отсекаем
+  // города, форматы и грейды — иначе компанией станет «Москва» или «удалённо».
+  m = title.match(/,\s*«?([^,«»]{2,30})»?\s*$/u);
+  if (m) {
+    const tail = m[1].trim();
+    if (/^[A-ZА-ЯЁ0-9]/.test(tail) && !ROLE_WORD.test(tail)
+      && !cityFrom(tail) && !workFormatFrom(tail) && !inferGrades(tail).length) {
+      candidates.push(tail);
     }
   }
   // заголовок: «Роль в X»

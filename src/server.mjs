@@ -44,10 +44,6 @@ function loadConfig() {
   return JSON.parse(readFileSync(configPath, "utf8"));
 }
 
-// Источники, которым нужен ключ в .env. Сам .env пульт не читает и не отдаёт —
-// наружу уходит только факт «ключ есть/нет».
-const ENV_SOURCES = { hh: "HH_TOKEN" };
-
 // --- уровни (лестница грейдов) ----------------------------------------------
 // У каждого уровня свои ключевые фразы; включённые уровни дают плоский
 // cfg.keywords для сборщика (плюс направления, их UI шлёт в keywords сам).
@@ -187,16 +183,7 @@ async function handle(req, res) {
       return json(res, 200, { needsSetup: true });
     }
     const known = (await discoverSources()).map((s) => s.name);
-    const sources = known.map((name) => ({
-      name,
-      enabled: cfg.sources?.[name] !== false,
-      // источникам с токеном пульт рисует замок и подсказку вместо галочки —
-      // иначе про них узнать неоткуда: включить их без ключа всё равно нельзя
-      ...(ENV_SOURCES[name] && {
-        needsEnv: ENV_SOURCES[name],
-        envReady: !!process.env[ENV_SOURCES[name]],
-      }),
-    }));
+    const sources = known.map((name) => ({ name, enabled: cfg.sources?.[name] !== false }));
     const tgOff = new Set(cfg.telegram?.disabled || []);
     const tgChannels = (cfg.telegram?.channels || []).map((name) => ({
       name,
