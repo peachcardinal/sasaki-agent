@@ -189,13 +189,22 @@ export function areasOf(text) {
   return [...found];
 }
 
+// Специализацию ищем в ОСНОВНОЙ части заголовка: то, что в скобках, — это, как
+// правило, охват продукта, а не область дизайна. «Design Team Lead (Web, TV &
+// Auto)» — продуктовый лид в Звуке, но слово Web из скобок делало его
+// веб-дизайнером и выбрасывало у всех, кто выбрал продуктовый дизайн.
+const withoutParens = (s) => String(s || "").replace(/\([^)]*\)/g, " ");
+
 function areaOk(item, dirs) {
   if (!dirs?.length) return true;
   const allowed = new Set(dirs.flatMap((d) => DIRECTION_AREAS[normalize(d)] || []));
   if (!allowed.size) return true; // своё (нестандартное) направление — не судим
-  const found = areasOf(item.title);
+  const found = areasOf(withoutParens(item.title));
   if (!found.length) return true;
-  return found.some((a) => allowed.has(a));
+  if (found.some((a) => allowed.has(a))) return true;
+  // но в скобках может стоять и уточнение специализации («Веб-дизайнер (UX/UI)»)
+  // — если своя область нашлась хоть где-то в заголовке, не режем
+  return areasOf(item.title).some((a) => allowed.has(a));
 }
 
 // Разовые/неполные форматы найма: агент ищет постоянную работу — консультации,

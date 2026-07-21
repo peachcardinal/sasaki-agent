@@ -59,7 +59,7 @@ const LEVEL_DEFAULT_KEYWORDS = {
   junior: ["джуниор дизайнер", "младший дизайнер", "начинающий дизайнер", "junior ux", "junior ui", "junior designer"],
   middle: ["мидл дизайнер", "middle ux", "middle ui", "middle designer", "middle product designer"],
   senior: ["старший дизайнер", "senior ux", "senior ui", "senior designer", "senior product designer"],
-  lead: ["дизайн лид", "лид дизайнер", "ведущий дизайнер", "lead ux", "design lead", "lead product designer"],
+  lead: ["дизайн лид", "лид дизайнер", "ведущий дизайнер", "главный дизайнер", "lead ux", "design lead", "lead product designer"],
   head: ["руководитель дизайна", "дизайн директор", "head of design", "design director", "арт-директор"],
 };
 
