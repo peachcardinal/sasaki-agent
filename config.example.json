@@ -1,0 +1,47 @@
+{
+  "keywords": [
+    "продуктовый дизайнер",
+    "дизайн лид"
+  ],
+  "directions": [
+    "продуктовый дизайн"
+  ],
+  "stopwords": [
+    "стажер",
+    "junior"
+  ],
+  "grades": [],
+  "formats": [],
+  "retentionDays": 30,
+  "sources": {
+    "getmatch": true,
+    "habr": true,
+    "hirehi": true,
+    "designer.ru": true,
+    "finder": true,
+    "telegram": true,
+    "linkedin": true,
+    "hh": false,
+    "alfa": true,
+    "avito": true,
+    "2gis": true,
+    "magnit": true,
+    "mts": true,
+    "rwb": true,
+    "tbank": true,
+    "tochka": true,
+    "vk": true,
+    "x5": true,
+    "yandex": true
+  },
+  "delivery": {
+    "channels": ["telegram", "markdown"],
+    "markdown": { "dir": "out" },
+    "csv": { "file": "out/vacancies.csv" },
+    "webhook": { "url": "", "format": "slack" }
+  },
+  "telegram": {
+    "channels": ["@designhunters", "@designoffers"],
+    "disabled": []
+  }
+}

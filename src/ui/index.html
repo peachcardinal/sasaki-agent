@@ -1,0 +1,1453 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>sasaki-agent · пульт</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #fff; --card: #fff; --fg: #1a1a1a; --muted: #757575;
+    --line: #e4e4e4; --accent: #1a1a1a; --accent-fg: #fff;
+    --chip: #efefef; --chip-on: #dcfce7; --chip-on-fg: #166534;
+    --danger: #b91c1c; --side: #f5f5f5; --tab-active: #fff;
+    --badge-bg: #e5e5e5; --badge-fg: #4f4f4f; --hl: #ffe08a; --row-hover: #ececec;
+    --chev: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23757575" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>');
+    --check: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>');
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111; --card: #1b1b1b; --fg: #eaeaea; --muted: #a0a0a0;
+      --line: #2a2a2a; --accent: #eaeaea; --accent-fg: #111;
+      --chip: #262626; --chip-on: #14351f; --chip-on-fg: #86efac;
+      --danger: #f87171; --side: #1b1b1b; --tab-active: #333;
+      --badge-bg: #333; --badge-fg: #c4c4c4; --hl: rgba(255, 214, 102, .3); --row-hover: #232323;
+      --chev: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23a0a0a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>');
+      --check: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23111111" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>');
+    }
+  }
+  * { box-sizing: border-box; }
+  /* Атрибут hidden обязан побеждать любой авторский display, иначе элементы с
+     display:flex (.layout, .empty, .drawer) остаются видимыми при hidden=true.
+     !important — потому что у правил с классами специфичность выше. */
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* --- каркас: парящий сайдбар слева + лента справа --- */
+  .layout { display: flex; height: 100vh; padding: 16px; gap: 16px; }
+  .sidebar {
+    width: 240px; flex: none; background: var(--side);
+    border-radius: 10px; position: relative;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .side-scroll { flex: 1; overflow-y: auto; padding: 58px 14px 84px; }
+  /* шапка запинена над скроллом: та же градиентная подложка, что у кнопки
+     снизу, отражённая по вертикали — сверху плотно, книзу прозрачно */
+  .side-header {
+    position: absolute; left: 0; right: 0; top: 0; z-index: 2;
+    padding: 18px 14px 24px; pointer-events: none;
+    background: linear-gradient(to top, transparent, var(--side) 60%);
+  }
+  .side-header a { pointer-events: auto; }
+  /* кнопка парит над скроллом на градиентной подложке: снизу плотно, вверху прозрачно */
+  .side-footer {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 28px 14px 14px; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--side) 60%);
+  }
+  .side-footer button { pointer-events: auto; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  .brand {
+    font-size: 16px; line-height: 16px; font-weight: 650; margin: 0;
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .brand small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .brand a { color: inherit; text-decoration: none; }
+  .brand a:hover { color: var(--accent); text-decoration: underline; }
+
+  .block { margin-bottom: 18px; }
+  .block h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); margin: 0 0 6px; font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+    transition: color .15s, letter-spacing .25s;
+  }
+  .block h2:hover { color: var(--fg); letter-spacing: .1em; }
+  .block h2 .arr { display: inline-flex; transition: transform .15s; }
+  .block.closed h2 .arr { transform: rotate(-90deg); }
+  .block.closed .body { display: none; }
+  .hint { font-size: 12px; color: var(--muted); display: block; margin: 2px 0 6px; }
+
+  button {
+    font: inherit; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--fg); border-radius: 8px; padding: 9px 14px;
+    transition: border-color .15s, color .15s, background .15s, transform .1s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:not(:disabled):active { transform: scale(.96); }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  /* у primary фон = accent, смена рамки на accent не видна — приглушаем фон к --bg */
+  button.primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 82%, var(--bg));
+    border-color: color-mix(in srgb, var(--accent) 82%, var(--bg));
+  }
+  button.primary:disabled { opacity: .55; cursor: default; }
+  /* спиннер + этап в кнопке прогона */
+  #run { display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+  .spin { flex: none; animation: rotate .9s linear infinite; }
+  @keyframes rotate { to { transform: rotate(360deg); } }
+  button.block-btn { width: 100%; }
+
+  .opts { display: flex; flex-direction: column; }
+  label.opt {
+    display: flex; align-items: center; gap: 8px; padding: 4px 0;
+    font-size: 13.5px; cursor: pointer; user-select: none;
+  }
+  /* кастомный чекбокс: компактная галочка вместо крупной нативной */
+  .opt input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+    width: 15px; height: 15px; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--card); cursor: pointer;
+  }
+  .opt input[type="checkbox"]:hover { border-color: var(--muted); }
+  .opt input[type="checkbox"]:checked {
+    background: var(--accent) var(--check) center / 9px 9px no-repeat;
+    border-color: var(--accent);
+  }
+  /* кастомная радио-кнопка в том же стиле: точка = толстая рамка кружка */
+  .opt input[type="radio"] {
+    appearance: none; -webkit-appearance: none; margin: 0; flex: none;
+    width: 15px; height: 15px; border: 1px solid var(--line); border-radius: 50%;
+    background: var(--card); cursor: pointer; transition: border-width .1s;
+  }
+  .opt input[type="radio"]:hover { border-color: var(--muted); }
+  .opt input[type="radio"]:checked { border: 4.5px solid var(--accent); }
+  .opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* --- уровни: строка с фильтром и вложенным списком слов --- */
+  .lvl-row { display: flex; align-items: center; gap: 4px; }
+  .lvl-row .opt { flex: 1; min-width: 0; }
+  .flt {
+    border: none; background: none; padding: 2px 4px; border-radius: 6px;
+    color: var(--muted); cursor: pointer; line-height: 1; display: inline-flex;
+    opacity: 0; transition: opacity .12s;
+  }
+  .lvl-row:hover .flt, .flt.open { opacity: 1; }
+  .flt:hover, .flt.open { color: var(--accent); }
+  .lvl-kws { margin: 2px 0 8px 12px; padding-left: 10px; border-left: 2px solid var(--line); }
+
+  /* --- строка «добавить»: как чекбокс-строка, но с плюсом --- */
+  .add-row { color: var(--muted); }
+  .add-row:hover { color: var(--accent); }
+  .add-row .plus { display: inline-flex; flex: none; }
+  input.add {
+    border: 1px dashed var(--line); background: transparent; color: var(--fg);
+    border-radius: 8px; padding: 5px 10px; font: inherit; width: 100%; margin-top: 6px;
+  }
+  input.add:focus { outline: none; border-color: var(--accent); }
+
+  .note { color: var(--muted); font-size: 12.5px; }
+
+  /* --- вкладки: вакансии / отклики / скрытые --- */
+  .tabs {
+    display: inline-flex; gap: 2px; background: var(--side); border-radius: 10px;
+    padding: 3px;
+  }
+  .tab {
+    border: none; background: none; padding: 7px 14px; border-radius: 8px;
+    color: var(--muted); font-weight: 500;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab.active { background: var(--tab-active); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .tab .cnt { color: var(--muted); font-weight: 400; margin-left: 5px; font-size: 13px; }
+
+  /* --- действия в строке ленты вакансий --- */
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+  .row-actions button {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 36px; padding: 0 12px; font-size: 13.5px; white-space: nowrap;
+  }
+  /* иконочные кнопки всегда квадратные */
+  .row-actions .ghost { width: 36px; height: 36px; padding: 0; flex: none; color: var(--muted); }
+  .row-actions .ghost svg { display: block; }
+  .row-actions .ghost:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* --- иконки письма/копирования в откликах --- */
+  .icon-btn {
+    border: none; background: none; padding: 0; border-radius: 6px;
+    width: 36px; height: 36px; flex: none;
+    color: var(--muted); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { color: var(--accent); }
+  .icon-btn.on { color: var(--accent); }
+  .icon-btn svg { display: block; }
+
+  /* --- сопроводительное письмо: продолжение карточки-строки снизу --- */
+  tr.open-letter td:first-child { border-bottom-left-radius: 0; }
+  tr.open-letter td:last-child { border-bottom-right-radius: 0; }
+  .tracker tr.letter-row td { background: none; padding: 0; vertical-align: top; }
+  .letter-body {
+    background: var(--side); border-radius: 0 0 10px 10px;
+    margin-top: -6px; /* съедает border-spacing — приклеивается к своей строке */
+    padding: 0 16px 10px;
+    transition: background .15s; /* синхронно со строкой — заливка едет одним куском */
+  }
+  /* Письмо — продолжение той же карточки, а строки в таблице разные. Поэтому
+     ховер по любой из двух подсвечивает обе: сверху вниз обычным `+`,
+     снизу вверх — через :has(), «родителя» у соседа иначе не достать. */
+  .tracker tbody tr.open-letter:hover + tr.letter-row .letter-body,
+  .tracker tbody tr.letter-row:hover .letter-body { background: var(--row-hover); }
+  .tracker tbody tr.open-letter:has(+ tr.letter-row:hover) td { background: var(--row-hover); }
+  textarea.letter {
+    width: 100%; min-height: 80px; resize: none; overflow: hidden; display: block;
+    background: none; border: none; border-top: 1px solid var(--line);
+    color: var(--fg); font: inherit; font-size: 13.5px; line-height: 1.55;
+    padding: 10px 0 4px;
+  }
+  textarea.letter:focus { outline: none; }
+
+  /* --- верхняя панель: табы слева, поиск справа --- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 16px; flex: none;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .search-wrap { position: relative; width: 340px; flex: none; }
+  .search-ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); pointer-events: none; display: inline-flex; }
+  .search {
+    width: 100%; padding: 10px 12px 10px 34px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--card); color: var(--fg); font: inherit;
+    transition: border-color .15s;
+  }
+  .search:hover { border-color: var(--muted); }
+  .search:focus { outline: none; border-color: var(--accent); }
+  /* подсветка совпадений при активном поиске */
+  mark { background: var(--hl); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+  /* --- лента: скролл только внутри бокса, тени-подсказки сверху/снизу --- */
+  .feed { position: relative; flex: 1; min-height: 0; }
+  .table-wrap { height: 100%; overflow-y: auto; }
+  .feed-shadow {
+    position: absolute; left: 0; right: 0; height: 16px; z-index: 5;
+    pointer-events: none; opacity: 0; transition: opacity .15s;
+  }
+  .feed-shadow.top { top: 0; background: linear-gradient(to bottom, rgba(0,0,0,.10), transparent); }
+  .feed-shadow.bottom { bottom: 0; background: linear-gradient(to top, rgba(0,0,0,.10), transparent); }
+  .feed-shadow.show { opacity: 1; }
+
+  /* --- таблица трекера: строки-карточки в цвет сайдбара --- */
+  /* фиксированные ширины колонок — одинаковые во всех табах, гуляет только CTA */
+  table.tracker { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 14px; table-layout: fixed; }
+  col.c-date { width: 66px; } /* 60 бокс + 6 слева, справа падинга нет */
+  col.c-fmt { width: 140px; }
+  col.c-src { width: 160px; }
+  col.c-act { width: 300px; }
+  .tracker td { padding: 12px 10px; vertical-align: middle; background: var(--side); border: none; transition: background .15s; }
+  .tracker tbody tr:not(.letter-row):hover td { background: var(--row-hover); }
+  /* в одну строку — только мета-колонки; по классу, а не по позиции:
+     порядок колонок менялся и позиционные селекторы каждый раз ломали перенос */
+  .tracker td.fmtcell, .tracker td.srccell { white-space: nowrap; }
+  .tracker td:first-child { border-radius: 10px 0 0 10px; padding-left: 16px; }
+  .tracker td:last-child { border-radius: 0 10px 10px 0; padding-right: 16px; }
+  .tracker .muted { color: var(--muted); }
+  /* название не должно распирать строку: ~45% ширины, дальше мета-колонки */
+  .tracker td.job { white-space: normal; overflow-wrap: anywhere; }
+  /* кнопкам справа — воздух от края карточки */
+  .tracker td:last-child { padding-right: 12px; }
+  .job-title { font-weight: 550; }
+  .job-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .fmt-badge {
+    display: inline-block; font-size: 12.5px; padding: 3px 9px; border-radius: 7px;
+    background: var(--badge-bg); color: var(--badge-fg);
+  }
+  .contact { display: inline-flex; color: var(--muted); }
+  .contact:hover { color: var(--accent); }
+  .src-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--muted); text-decoration: none;
+  }
+  .src-link svg { flex: none; }
+  .src-link:hover { color: var(--accent); }
+  .src-link .fav { width: 16px; height: 16px; border-radius: 4px; flex: none; margin-right: 3px; }
+  /* вариант «нет ссылки»: серый, без ховер-акцента и клика */
+  .src-link.none { cursor: default; }
+  .src-link.none:hover { color: var(--muted); }
+
+  /* --- дата-бокс: день крупно, месяц мелко; тянется на высоту карточки ---
+     height:1px на td — трюк, чтобы height:100% ребёнка растянулся на строку */
+  /* датой открывается строка: слева тот же отступ 6, что и сверху/снизу */
+  .tracker td.datecell { padding: 6px 0 6px 6px; height: 1px; }
+  .datebox {
+    width: 60px; height: 100%; min-height: 48px; border-radius: 6px;
+    background: var(--badge-bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .datebox .d { font-size: 15px; font-weight: 650; line-height: 1.15; color: var(--fg); }
+  .datebox .m { font-size: 10.5px; line-height: 1.15; color: var(--muted); }
+
+  /* --- выпадашка статуса --- */
+  .st-wrap { position: relative; display: inline-block; }
+  .st-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg);
+    width: 142px; /* фикс под самый длинный статус — ширина не скачет */
+  }
+  .st-btn > span:nth-child(2) { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-btn .dot, .st-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .st-btn .chev { color: var(--muted); display: inline-flex; flex: none; transition: transform .15s; }
+  .st-btn.open .chev { transform: rotate(180deg); }
+  .st-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; min-width: 172px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 6px; max-height: 320px; overflow: auto;
+  }
+  /* .row-actions button центрирует контент — пункты меню перебиваем явно */
+  .st-item, .row-actions .st-item {
+    display: flex; align-items: center; justify-content: flex-start; gap: 9px; width: 100%;
+    padding: 9px 12px; border: none; background: none; color: var(--fg); border-radius: 8px; text-align: left;
+  }
+  .st-item:hover { background: var(--chip); }
+  .st-item .check { color: var(--accent); flex: none; margin-left: auto; display: inline-flex; }
+
+  .log { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap; color: var(--muted); margin-top: 8px;
+    max-height: 140px; overflow: auto; }
+  .log-toggle { margin-top: 10px; cursor: pointer; user-select: none; width: fit-content; }
+  .log-toggle:hover { color: var(--accent); }
+  /* --- пустые состояния вкладок --- */
+  .empty {
+    padding: 64px 24px; text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  /* линейная иллюстрация: приглушена, но читается в обеих темах */
+  .empty-art { width: 120px; height: 120px; color: var(--muted); opacity: .45; margin-bottom: 18px; }
+  .empty-art svg { display: block; width: 100%; height: 100%; }
+  .empty-title { font-size: 16px; font-weight: 600; color: var(--fg); margin-bottom: 6px; }
+  .empty-sub { font-size: 13.5px; color: var(--muted); max-width: 420px; line-height: 1.55; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 10px 18px; border-radius: 8px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; font-size: 14px; }
+  .toast.show { opacity: 1; }
+
+  .setup { max-width: 460px; margin: 80px auto; text-align: center; }
+  .setup code { background: var(--chip); padding: 2px 6px; border-radius: 5px; }
+
+  /* --- боковая модалка ручного отклика --- */
+  .drawer-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40;
+    animation: fade .3s ease;
+  }
+
+  /* закрытие — зеркало появления; forwards, чтобы кадр не отскочил назад,
+     пока JS не проставит hidden по окончании */
+  .drawer.closing { animation: slide-out .24s cubic-bezier(.4, 0, 1, 1) forwards; }
+  .drawer-back.closing { animation: fade-out .24s ease forwards; }
+  @keyframes slide-out { to { transform: translateX(calc(100% + 16px)); opacity: .5 } }
+  @keyframes fade-out { to { opacity: 0 } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drawer, .drawer-back, .drawer.closing, .drawer-back.closing { animation: none; }
+  }
+  @keyframes fade { from { opacity: 0 } }
+  /* отступы от краёв и радиус — как у сайдбара */
+  .drawer {
+    position: fixed; top: 16px; right: 16px; bottom: 16px;
+    width: 520px; max-width: calc(100vw - 32px); border-radius: 10px;
+    background: var(--card); z-index: 41; display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: -8px 0 32px rgba(0,0,0,.2);
+    animation: slide .34s cubic-bezier(.22, .61, .36, 1);
+  }
+  @keyframes slide { from { transform: translateX(calc(100% + 16px)); opacity: .5 } }
+  .drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px; flex: none;
+  }
+  .drawer-head h2 { margin: 0; font-size: 20px; font-weight: 650; }
+  /* нижний отступ — чтобы последнее поле не пряталось под парящей кнопкой */
+  .drawer-body { flex: 1; overflow-y: auto; padding: 0 16px 76px; }
+  /* кнопка парит над скроллом на градиентной подложке — как в сайдбаре.
+     верхние 28px — зона растушёвки градиента, не отступ контента */
+  .drawer-foot {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 28px 16px 16px; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--card) 60%);
+  }
+  .drawer-foot button { pointer-events: auto; }
+  .f-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .f-row .fld { margin-bottom: 0; }
+  .fld { display: block; position: relative; margin-bottom: 16px; }
+  .fld > span {
+    position: absolute; top: 7px; left: 13px; font-size: 11px; color: var(--muted);
+    pointer-events: none;
+  }
+  .fld input, .fld textarea, .fld select {
+    width: 100%; border: 1px solid transparent; background: var(--chip); color: var(--fg);
+    border-radius: 10px; padding: 22px 13px 8px; font: inherit; resize: vertical;
+  }
+  .fld textarea { padding-top: 24px; }
+  .fld select {
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+    padding-right: 34px; background-image: var(--chev);
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 14px;
+  }
+  .fld input:focus, .fld textarea:focus, .fld select:focus { outline: none; border-color: var(--accent); }
+  #add-err { color: var(--danger); margin: 12px 0 0; }
+
+  /* --- узкие экраны: сайдбар сверху --- */
+  @media (max-width: 760px) {
+    .layout { flex-direction: column; height: auto; padding: 0; }
+    .sidebar { width: 100%; border: none; border-radius: 0; border-bottom: 1px solid var(--line); }
+    .main { padding: 20px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+<div id="app" class="layout" hidden>
+  <aside class="sidebar">
+    <div class="side-header">
+      <div class="brand">sasaki-agent <small><a href="https://10byrs.com" target="_blank" rel="noopener">by 10byrs</a></small></div>
+    </div>
+    <div class="side-scroll">
+      <div class="block" data-block="level">
+        <h2>Уровень<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <div id="levels"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="direction">
+        <h2>Направление<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <span class="hint">Отметка добавит в ключевые слова</span>
+          <div class="opts" id="presets"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="format">
+        <h2>Формат<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <div class="opts" id="wformats"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="period">
+        <h2>Период<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <div class="opts" id="period"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="stop">
+        <h2>Стоп-слова<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <div class="opts" id="stopwords"></div>
+        </div>
+      </div>
+
+      <div class="block" data-block="sources">
+        <h2>Источники<span class="arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></h2>
+        <div class="body">
+          <span class="hint">Сайты компаний</span>
+          <div class="opts" id="src-companies"></div>
+          <span class="hint" style="margin-top:10px">Агрегаторы</span>
+          <div class="opts" id="src-aggregators"></div>
+          <span class="hint" id="tgchans-label" style="margin-top:10px" hidden>Telegram-каналы</span>
+          <div class="opts" id="tgchans"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-footer">
+      <button class="primary block-btn" id="run">Найти вакансии</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="tabs" id="tabs"></div>
+      <div class="topbar-right">
+        <div class="search-wrap">
+        <span class="search-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <input id="search" class="search" placeholder="Должность, компания или источник" autocomplete="off" />
+        </div>
+        <button class="primary" id="add-open">Добавить отклик</button>
+      </div>
+    </div>
+
+    <div class="feed">
+      <div class="table-wrap" id="feedbox">
+        <table class="tracker">
+          <colgroup>
+            <col class="c-date" /><col /><col class="c-fmt" /><col class="c-src" /><col class="c-act" />
+          </colgroup>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden></div>
+      </div>
+      <div class="feed-shadow top" id="sh-top"></div>
+      <div class="feed-shadow bottom" id="sh-bottom"></div>
+    </div>
+
+    <div class="note log-toggle" id="log-toggle" hidden>лог последнего прогона</div>
+    <div class="log" id="log" hidden></div>
+  </main>
+</div>
+
+<div id="setup" class="setup" hidden>
+  <h2>Нет конфига</h2>
+  <p>Сначала пройди мастер настройки в терминале: <code>npm run setup</code>, затем обнови страницу.</p>
+</div>
+
+<!-- боковая модалка ручного отклика -->
+<div class="drawer-back" id="add-back" hidden></div>
+<aside class="drawer" id="add-drawer" hidden aria-label="Добавить отклик">
+  <div class="drawer-head">
+    <h2>Добавить отклик</h2>
+    <button class="icon-btn" id="add-close" title="Закрыть">✕</button>
+  </div>
+  <div class="drawer-body">
+    <label class="fld"><span>Название вакансии</span><input id="f-title" placeholder="Продуктовый дизайнер" autocomplete="off" /></label>
+    <label class="fld"><span>Компания</span><input id="f-company" placeholder="Яндекс" autocomplete="off" /></label>
+    <div class="f-row">
+      <label class="fld"><span>Дата отклика</span><input id="f-date" inputmode="numeric" placeholder="дд.мм.гггг" maxlength="10" autocomplete="off" /></label>
+      <label class="fld"><span>Грейд</span><select id="f-level"></select></label>
+    </div>
+    <div class="f-row">
+      <label class="fld"><span>Формат работы</span><select id="f-format"></select></label>
+      <label class="fld"><span>Статус</span><select id="f-status"></select></label>
+    </div>
+    <label class="fld"><span>Ссылка на вакансию</span><input id="f-url" placeholder="https://career.yandex.ru/vacancy/12345" autocomplete="off" /></label>
+    <label class="fld"><span>Сопр. письмо</span><textarea id="f-letter" rows="5" placeholder="Здравствуйте! Увидел вашу вакансию…"></textarea></label>
+    <p class="note" id="add-err" hidden></p>
+  </div>
+  <div class="drawer-foot">
+    <button class="primary block-btn" id="add-save">Добавить</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = { keywords: [], stopwords: [], sources: [] };
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// Изменение любого чекбокса/списка применяется сразу: короткий дебаунс,
+// чтобы серия кликов ушла одним запросом.
+let saveTimer;
+function markDirty() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+
+// --- чекбокс-строка ---------------------------------------------------------
+function optRow(text, checked, onToggle, type = "checkbox") {
+  const lab = document.createElement("label");
+  lab.className = "opt";
+  const cb = document.createElement("input");
+  cb.type = type; cb.checked = checked;
+  if (type === "radio") cb.name = "period"; // единственная радио-группа в пульте
+  cb.onchange = () => onToggle(cb.checked);
+  const span = document.createElement("span");
+  span.textContent = text; span.title = text;
+  lab.append(cb, span);
+  return lab;
+}
+
+// --- списки слов (стоп-слова, слова уровней) --------------------------------
+// Снятая галочка убирает слово при «Применить критерии»; до сохранения
+// строка остаётся видимой, чтобы можно было передумать.
+const excluded = { stopwords: new Set() };
+
+function renderWords(containerId, list, onChange) {
+  const el = $(containerId);
+  const off = excluded[containerId];
+  el.textContent = "";
+  list.forEach((word) => {
+    el.append(optRow(word, !off.has(word), (on) => {
+      if (on) off.delete(word); else off.add(word);
+      markDirty(); if (onChange) onChange();
+    }));
+  });
+  el.append(addRow((v) => {
+    if (!list.includes(v)) { list.push(v); markDirty(); if (onChange) onChange(); }
+    renderWords(containerId, list, onChange);
+  }));
+}
+
+// --- уровни ------------------------------------------------------------------
+// Чекбокс включает уровень в поиск, иконка фильтров (видна при ховере или пока
+// список раскрыт) показывает ключевые фразы уровня.
+const FILTER_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>';
+const PLUS_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+// Строка «+ добавить» в стиле чекбокс-строки; клик превращает её в инпут.
+// Enter/запятая добавляет слово (onAdd сам перерисует список), Esc/уход — отмена.
+function addRow(onAdd) {
+  const lab = document.createElement("label");
+  lab.className = "opt add-row";
+  const ico = document.createElement("span"); ico.className = "plus"; ico.innerHTML = PLUS_SVG;
+  const txt = document.createElement("span"); txt.textContent = "добавить";
+  lab.append(ico, txt);
+  lab.onclick = () => {
+    const input = document.createElement("input");
+    input.className = "add"; input.placeholder = "новое слово";
+    lab.replaceWith(input);
+    input.focus();
+    const cancel = () => input.replaceWith(lab);
+    input.onblur = cancel;
+    input.onkeydown = (e) => {
+      if ((e.key === "Enter" || e.key === ",") && input.value.trim()) {
+        e.preventDefault();
+        input.onblur = null;
+        onAdd(input.value.trim().replace(/,$/, ""));
+      } else if (e.key === "Escape") {
+        input.onblur = null;
+        cancel();
+      }
+    };
+  };
+  return lab;
+}
+
+const openLevels = new Set();   // у каких уровней раскрыты слова
+const excludedLvl = {};         // name → Set снятых слов до сохранения
+
+function renderLevels() {
+  const el = $("levels"); el.textContent = "";
+  (state.levels || []).forEach((l) => {
+    excludedLvl[l.name] = excludedLvl[l.name] || new Set();
+    const row = document.createElement("div"); row.className = "lvl-row";
+    const opt = optRow(l.name, l.on, (on) => { l.on = on; markDirty(); });
+    const flt = document.createElement("button");
+    flt.className = "flt" + (openLevels.has(l.name) ? " open" : "");
+    flt.innerHTML = FILTER_SVG; flt.title = "ключевые слова уровня";
+    flt.onclick = () => {
+      if (openLevels.has(l.name)) openLevels.delete(l.name); else openLevels.add(l.name);
+      renderLevels();
+    };
+    row.append(opt, flt);
+    el.append(row);
+
+    if (!openLevels.has(l.name)) return;
+    const box = document.createElement("div"); box.className = "lvl-kws";
+    const off = excludedLvl[l.name];
+    l.keywords.forEach((w) => {
+      box.append(optRow(w, !off.has(w), (on) => {
+        if (on) off.delete(w); else off.add(w);
+        markDirty();
+      }));
+    });
+    box.append(addRow((v) => {
+      if (!l.keywords.includes(v)) { l.keywords.push(v); markDirty(); }
+      renderLevels();
+    }));
+    el.append(box);
+  });
+}
+
+// --- направления (специализации) → добавляются в ключевые слова -------------
+const PRESETS = ["продуктовый дизайн", "UX/UI", "web-дизайн", "графический дизайн", "motion-дизайн", "иллюстрация"];
+let dirs = new Set(); // отмеченные направления
+
+function renderPresets() {
+  const el = $("presets"); el.textContent = "";
+  PRESETS.forEach((p) => {
+    el.append(optRow(p, dirs.has(p), (on) => {
+      if (on) dirs.add(p); else dirs.delete(p);
+      markDirty();
+    }));
+  });
+}
+
+// --- источники --------------------------------------------------------------
+// Телеграм в общем списке не показываем — вместо него отдельные каналы.
+// hh/linkedin/2gis скрыты и выключены в конфиге.
+const HIDDEN_SOURCES = new Set(["telegram", "hh", "linkedin", "2gis"]);
+// Агрегаторы отделены от карьерных сайтов компаний; всё, чего нет в списке,
+// считается сайтом компании.
+const AGGREGATORS = new Set(["getmatch", "habr", "hirehi", "finder", "designer.ru", "hh", "linkedin", "careerspace", "geekjob"]);
+
+function renderSources() {
+  const companies = $("src-companies"); companies.textContent = "";
+  const aggregators = $("src-aggregators"); aggregators.textContent = "";
+  state.sources.filter((s) => !HIDDEN_SOURCES.has(s.name)).forEach((s) => {
+    const box = AGGREGATORS.has(s.name) ? aggregators : companies;
+    box.append(optRow(s.name, s.enabled, (on) => { s.enabled = on; markDirty(); }));
+  });
+  renderTgChannels();
+}
+
+function renderTgChannels() {
+  const el = $("tgchans"); el.textContent = "";
+  const chans = state.tgChannels || [];
+  $("tgchans-label").hidden = chans.length === 0;
+  chans.forEach((c) => {
+    el.append(optRow(c.name, c.enabled, (on) => { c.enabled = on; markDirty(); }));
+  });
+}
+
+// --- фильтр по формату работы (удалённо / гибрид / офис) -------------------
+// «не указан» специально не предлагаем: неизвестный формат не режем никогда —
+// вакансия может подходить, а осознанно выбирать «не указан» никто не станет
+const WORK_FORMATS = ["удалённо", "гибрид", "офис"];
+// какие форматы скрыты в ленте (переживает перезагрузку)
+const hiddenFormats = new Set(
+  JSON.parse(localStorage.getItem("hiddenFormats") || "[]").map((s) => String(s).toLowerCase())
+);
+
+function workFormat(v) {
+  const s = (v.location || "").toLowerCase();
+  if (/гибрид|hybrid/.test(s)) return "гибрид";
+  if (/удал[её]н|remote|дистанц/.test(s)) return "удалённо";
+  if (s.replace(/[·,|/]|\d{4}-\d{2}-\d{2}|lead|senior|middle|junior|стажер|стажёр/g, "").trim()) return "офис";
+  return "не указан";
+}
+
+// Город из location — то, что остаётся после вычитания формата и прочих меток.
+// Длинные названия сокращаем, чтобы бейдж «гибрид, Город» влезал в колонку.
+const CITY_SHORT = { "санкт-петербург": "СПб", "нижний новгород": "Н. Новгород", "ростов-на-дону": "Ростов" };
+function cityOf(v) {
+  const city = (v.location || "").split(/[·,|/]/)
+    .map((s) => s.trim())
+    .filter((s) => s && !/гибрид|hybrid|удал[её]н|remote|дистанц|офис|office|on-?site|\d{4}-\d{2}-\d{2}|^(lead|senior|middle|junior)$|стажер|стажёр/i.test(s))[0] || "";
+  return CITY_SHORT[city.toLowerCase()] || city;
+}
+
+// Формат — и критерий ПОИСКА (config.formats, режет на сборе), и фильтр уже
+// собранной ленты. Один чекбокс управляет обоими, поэтому список показан
+// всегда, ещё до первого прогона.
+const FMT_CANON = { "удалённо": "remote", "гибрид": "hybrid", "офис": "office" };
+
+function renderWFormats() {
+  const el = $("wformats"); el.textContent = "";
+  WORK_FORMATS.forEach((f) => {
+    el.append(optRow(f, !hiddenFormats.has(f), (on) => {
+      if (on) hiddenFormats.delete(f); else hiddenFormats.add(f);
+      localStorage.setItem("hiddenFormats", JSON.stringify([...hiddenFormats]));
+      markDirty(); // уходит и в config.formats — критерий следующего прогона
+      renderMain();
+    }));
+  });
+}
+
+// --- фильтр по периоду публикации -------------------------------------------
+const PERIODS = [
+  { days: 7, label: "за неделю" },
+  { days: 14, label: "за две недели" },
+  { days: 30, label: "за месяц" },
+  { days: 90, label: "за три месяца" },
+  { days: 180, label: "за полгода" },
+];
+let periodDays = Number(localStorage.getItem("periodDays")) || 180;
+
+function jobDate(v) { return Date.parse(v.published || v.collectedAt || "") || 0; }
+
+function renderPeriods() {
+  const el = $("period"); el.textContent = "";
+  PERIODS.forEach(({ days, label }) => {
+    el.append(optRow(label, periodDays === days, () => {
+      periodDays = days; // радио: выбор всегда ровно один
+      localStorage.setItem("periodDays", String(periodDays));
+      renderPeriods(); renderMain();
+    }, "radio"));
+  });
+}
+
+// --- лента и трекер откликов ------------------------------------------------
+// Три пула: «Новая» (лента найденного), воронка откликов (STATUSES) и
+// «Скрыта» (не интересна). Вкладки переключают пул, статус хранится в jobs.json.
+const VIEWS = [
+  { key: "new", label: "Вакансии" },
+  { key: "applied", label: "Отклики" },
+  { key: "hidden", label: "Скрытые" },
+];
+let view = localStorage.getItem("view") || "new";
+const STATUSES = ["Новый", "Отклик", "Без ответа", "Собес", "Тестовое", "Оффер", "Отказ", "Архив"];
+const STATUS_COLOR = {
+  "Новый": "#3b82f6",
+  "Отклик": "#22c55e", "Без ответа": "#9ca3af", "Собес": "#06b6d4",
+  "Тестовое": "#f59e0b", "Оффер": "#10b981", "Отказ": "#ef4444", "Архив": "#6b7280",
+};
+const LINK_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const ARROW_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>';
+// разорванная ссылка — у вакансии нет URL
+const LINKOFF_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 4.64 6.88"/><line x1="8" y1="12" x2="12" y2="12"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
+// перечёркнутый глаз — «скрыть вакансию»
+const EYEOFF_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+const MAIL_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+// заполненный конверт — в строке есть сохранённое письмо
+const MAIL_FILLED_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z"/><path d="M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z"/></svg>';
+// «копировать текст»: лист с строками + второй лист позади
+const COPY_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="7" width="12" height="14" rx="2"/><line x1="11.5" y1="11.5" x2="16.5" y2="11.5"/><line x1="11.5" y1="14.5" x2="16.5" y2="14.5"/><line x1="11.5" y1="17.5" x2="14.5" y2="17.5"/><path d="M4 17V5a2 2 0 0 1 2-2h8"/></svg>';
+const TRASH_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
+
+const MONTHS_RU = ["янв", "фев", "марта", "апр", "мая", "июня", "июля", "авг", "сент", "окт", "нояб", "дек"];
+// короткие месяцы для дата-бокса в строке
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+function dateBox(s) {
+  const box = document.createElement("div"); box.className = "datebox";
+  const day = document.createElement("span"); day.className = "d";
+  const mon = document.createElement("span"); mon.className = "m";
+  const d = new Date(s || "");
+  if (isNaN(d)) day.textContent = "—";
+  else { day.textContent = d.getDate(); mon.textContent = MONTHS_SHORT[d.getMonth()]; }
+  box.append(day, mon);
+  return box;
+}
+function fmtDate(s) {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d)) return "—";
+  return `${d.getDate()} ${MONTHS_RU[d.getMonth()]}`;
+}
+function statusOf(v) { return v.status || "Новая"; }
+function viewOf(v) {
+  const s = statusOf(v);
+  if (s === "Новая") return "new";
+  if (s === "Скрыта") return "hidden";
+  return "applied";
+}
+// Лента «Вакансии» показывает только подходящее под текущие критерии
+// (флаг matchesNow считает сервер); отклики и скрытые — история, не фильтруем.
+function inView(v, key) {
+  return viewOf(v) === key && (key !== "new" || v.matchesNow !== false);
+}
+// Для телеграма источник — сам канал (@name из id "канал:msgId"), а @канал
+// в поле company каналом и является, компанией его не показываем.
+function sourceLabel(v) {
+  if (v.source === "telegram") return "@" + String(v.id).split(":")[0];
+  return v.source || "";
+}
+function companyOf(v) {
+  const c = v.company || "";
+  return c.startsWith("@") ? "" : c;
+}
+// Грейд: метаданные источника (level) приоритетнее, иначе — из заголовка.
+// Зеркалит GRADE_WORDS в src/lib/filter.mjs.
+// Грейд(ы) для показа. У некоторых источников (Т-Банк) вакансия помечена
+// диапазоном — «Middle/Senior»: показываем ВСЕ найденные грейды, а не первый по
+// старшинству, иначе «мидл-вакансия» в строке выглядела бы как «senior» и
+// сбивала с толку при фильтре по мидлу.
+const GRADE_ORDER = ["intern", "junior", "middle", "senior", "lead", "head"];
+const GRADE_PATTERNS = {
+  head: /head|director|директор|руковод|principal/,
+  lead: /lead|лид|ведущ/,
+  senior: /senior|старш|сеньор|синьор/,
+  middle: /middle|мидл|миддл/,
+  junior: /junior|джун|младш|начинающ/,
+  intern: /intern|стаж/,
+};
+function gradeOf(v) {
+  const hay = ((v.level || "") + " " + (v.level ? "" : v.title || "")).toLowerCase();
+  return GRADE_ORDER.filter((g) => GRADE_PATTERNS[g].test(hay)).join("/");
+}
+
+function closeMenus() {
+  document.querySelectorAll(".st-menu").forEach((m) => (m.hidden = true));
+  document.querySelectorAll(".st-btn.open").forEach((b) => b.classList.remove("open"));
+}
+document.addEventListener("click", closeMenus);
+
+async function setStatus(v, status, note) {
+  const prev = v.status;
+  v.status = status;
+  renderMain();
+  const r = await fetch("/api/status", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: v.source, id: v.id, status }),
+  });
+  if (!r.ok) { v.status = prev; renderMain(); toast("Не удалось сменить статус"); }
+  else if (note) toast(note);
+}
+
+// Удаление ручного отклика — необратимо (в ленте вакансий его нет, вернуть
+// неоткуда), поэтому спрашиваем подтверждение.
+async function removeJob(v) {
+  const what = [v.title, companyOf(v)].filter(Boolean).join(" · ");
+  if (!confirm(`Удалить отклик «${what}»? Отменить будет нельзя.`)) return;
+  const r = await fetch("/api/job/delete", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: v.source, id: v.id }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(data.error || "Не удалось удалить"); return; }
+  state.jobs = data.jobs || (state.jobs || []).filter((j) => j !== v);
+  renderMain();
+  toast("Отклик удалён");
+}
+
+function statusCell(v) {
+  const wrap = document.createElement("div"); wrap.className = "st-wrap";
+  const cur = statusOf(v);
+  const btn = document.createElement("button"); btn.className = "st-btn";
+  const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = STATUS_COLOR[cur] || "#9ca3af";
+  const lbl = document.createElement("span"); lbl.textContent = cur;
+  const chev = document.createElement("span"); chev.className = "chev";
+  chev.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+  btn.append(dot, lbl, chev);
+  const menu = document.createElement("div"); menu.className = "st-menu"; menu.hidden = true;
+  STATUSES.forEach((s) => {
+    const item = document.createElement("button"); item.className = "st-item";
+    const d = document.createElement("span"); d.className = "dot"; d.style.background = STATUS_COLOR[s];
+    const t = document.createElement("span"); t.textContent = s;
+    item.append(d, t);
+    if (s === cur) {
+      const ck = document.createElement("span"); ck.className = "check";
+      ck.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      item.append(ck);
+    }
+    item.onclick = (e) => { e.stopPropagation(); closeMenus(); setStatus(v, s); };
+    menu.append(item);
+  });
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    const wasOpen = !menu.hidden; closeMenus();
+    if (!wasOpen) { menu.hidden = false; btn.classList.add("open"); }
+  };
+  wrap.append(btn, menu);
+  return wrap;
+}
+
+// лента, суженная фильтрами формата и периода (скоуп всего правого пейна и счётчиков)
+function formatFiltered() {
+  const minDate = Date.now() - periodDays * 24 * 3600e3;
+  return (state.jobs || []).filter((v) => {
+    const wf = workFormat(v);
+    // «не указан» не скрывается никогда (в т.ч. если остался в старом localStorage)
+    if (wf !== "не указан" && hiddenFormats.has(wf)) return false;
+    const d = jobDate(v);
+    return d === 0 || d >= minDate; // без даты — не режем
+  });
+}
+function visibleJobs() {
+  const q = ($("search").value || "").trim().toLowerCase();
+  const jobs = formatFiltered().filter((v) => inView(v, view));
+  if (!q) return jobs;
+  return jobs.filter((v) =>
+    [v.company, v.title, v.source, v.location, v.url].filter(Boolean).join(" ").toLowerCase().includes(q)
+  );
+}
+
+function renderTabs() {
+  const el = $("tabs"); el.textContent = "";
+  const jobs = formatFiltered();
+  VIEWS.forEach(({ key, label }) => {
+    const b = document.createElement("button");
+    b.className = "tab" + (view === key ? " active" : "");
+    b.append(document.createTextNode(label));
+    const c = document.createElement("span"); c.className = "cnt";
+    c.textContent = jobs.filter((v) => inView(v, key)).length;
+    b.append(c);
+    b.onclick = () => { view = key; localStorage.setItem("view", key); renderMain(); };
+    el.append(b);
+  });
+}
+
+// --- пустые состояния -------------------------------------------------------
+// Свои иллюстрация, заголовок и пояснение на каждую вкладку: пустой экран должен
+// объяснять, как он наполняется. Картинки — линейный SVG в цвет темы, без внешних
+// файлов (пульт работает офлайн).
+const ART = {
+  // стопка карточек под лупой — «ищем вакансии»
+  new: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="16" width="58" height="74" rx="8"/><line x1="30" y1="36" x2="58" y2="36"/><line x1="30" y1="50" x2="64" y2="50"/><line x1="30" y1="64" x2="48" y2="64"/><circle cx="80" cy="72" r="20" fill="var(--side)"/><line x1="94" y1="86" x2="106" y2="98"/></svg>',
+  // бумажный самолётик — «отклики отправляются»
+  applied: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M104 20 16 54l34 12z"/><path d="M50 66l6 32 16-20"/><path d="M104 20 56 98"/><path d="M104 20 50 66"/></svg>',
+  // перечёркнутый глаз — «скрыто с глаз»
+  hidden: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 60s18-28 46-28 46 28 46 28-18 28-46 28S14 60 14 60Z"/><circle cx="60" cy="60" r="13"/><line x1="22" y1="98" x2="98" y2="22"/></svg>',
+  // лупа с пустым полем — «по запросу ничего»
+  search: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="54" cy="54" r="30"/><line x1="76" y1="76" x2="98" y2="98"/><line x1="42" y1="54" x2="66" y2="54"/></svg>',
+};
+
+const EMPTY_TEXT = {
+  new: {
+    title: "Пока ничего нет",
+    sub: "Здесь появятся вакансии, подходящие под твои критерии. Настрой их слева и нажми «Найти вакансии».",
+  },
+  applied: {
+    title: "Откликов пока нет",
+    sub: "Сюда попадут вакансии, на которые ты откликнулся, — по кнопке «В отклики» в списке. У каждой можно вести статус и хранить сопроводительное письмо.",
+  },
+  hidden: {
+    title: "Скрытых вакансий нет",
+    sub: "Здесь будут вакансии, которые тебе не подошли, — те, что ты скрыл кнопкой с пальцем вниз. Любую можно вернуть в список кнопкой «Вернуть».",
+  },
+  search: {
+    title: "Ничего не найдено",
+    sub: "По этому запросу совпадений нет. Попробуй другое слово — поиск смотрит должность, компанию и источник.",
+  },
+};
+
+function renderEmpty(el, key) {
+  el.textContent = "";
+  const { title, sub } = EMPTY_TEXT[key];
+  const art = document.createElement("div"); art.className = "empty-art"; art.innerHTML = ART[key];
+  const t = document.createElement("div"); t.className = "empty-title"; t.textContent = title;
+  const s = document.createElement("div"); s.className = "empty-sub"; s.textContent = sub;
+  el.append(art, t, s);
+}
+
+// Записать текст в элемент, подсветив вхождения запроса. Собираем из текстовых
+// узлов (не innerHTML) — содержимое источников не доверенное.
+function setHl(el, text, q) {
+  el.textContent = "";
+  const s = String(text ?? "");
+  if (!q) { el.textContent = s; return; }
+  const lower = s.toLowerCase();
+  let from = 0, at;
+  while ((at = lower.indexOf(q, from)) !== -1) {
+    if (at > from) el.append(s.slice(from, at));
+    const m = document.createElement("mark");
+    m.textContent = s.slice(at, at + q.length);
+    el.append(m);
+    from = at + q.length;
+  }
+  el.append(s.slice(from));
+}
+
+function renderRows() {
+  const tbody = $("rows"); tbody.textContent = "";
+  const q = ($("search").value || "").trim().toLowerCase();
+  const jobs = visibleJobs().sort((a, b) => jobDate(b) - jobDate(a)); // новые сверху
+  const empty = $("empty");
+  if (!jobs.length) {
+    empty.hidden = false;
+    renderEmpty(empty, ($("search").value || "").trim() ? "search" : view);
+    updateFeedShadows();
+    return;
+  }
+  empty.hidden = true;
+  jobs.forEach((v) => {
+    const tr = document.createElement("tr");
+    const td = (cls) => { const c = document.createElement("td"); if (cls) c.className = cls; tr.append(c); return c; };
+    td("datecell").append(dateBox(v.published || v.collectedAt)); // дата открывает строку
+    const job = td("job");
+    const ttl = document.createElement("div"); ttl.className = "job-title";
+    setHl(ttl, v.title || "—", q);
+    const sub = document.createElement("div"); sub.className = "job-sub";
+    setHl(sub, `${companyOf(v) || "не указана"} · ${gradeOf(v) || "не указан"}`, q);
+    job.append(ttl, sub);
+    const fmt = td("fmtcell"); const wf = workFormat(v);
+    if (wf === "не указан") { fmt.className = "fmtcell muted"; fmt.textContent = "не указан"; }
+    else {
+      const b = document.createElement("span"); b.className = "fmt-badge";
+      // гибрид без города мало о чём говорит — дописываем город из вакансии
+      const city = wf === "гибрид" ? cityOf(v) : "";
+      setHl(b, city ? `${wf}, ${city}` : wf, q);
+      fmt.append(b);
+    }
+    const contact = td("srccell");
+    const safeUrl = /^https?:\/\//i.test(v.url || "") ? v.url : ""; // содержимое источников не доверенное
+    if (safeUrl) {
+      const a = document.createElement("a");
+      a.className = "src-link"; a.href = safeUrl; a.target = "_blank"; a.rel = "noopener";
+      a.title = "Открыть вакансию"; setHl(a, sourceLabel(v) || "открыть", q);
+      // фавиконка сайта источника (через кэш-сервис гугла); не загрузилась — убираем
+      const fav = document.createElement("img");
+      fav.className = "fav"; fav.alt = ""; fav.loading = "lazy";
+      try { fav.src = "https://www.google.com/s2/favicons?domain=" + new URL(safeUrl).hostname + "&sz=32"; } catch { /* без иконки */ }
+      fav.onerror = () => fav.remove();
+      if (fav.src) a.prepend(fav);
+      a.insertAdjacentHTML("beforeend", ARROW_SVG);
+      contact.append(a);
+    } else {
+      // без ссылки: серый значок разорванной цепочки + подпись
+      const s = document.createElement("span"); s.className = "src-link none";
+      s.innerHTML = LINKOFF_SVG;
+      const t = document.createElement("span"); t.textContent = "нет ссылки";
+      s.append(t);
+      contact.append(s);
+    }
+    const last = td();
+    if (view === "applied") {
+      const box = document.createElement("div"); box.className = "row-actions";
+      const key = `${v.source}:${v.id}`;
+      const mail = document.createElement("button");
+      mail.className = "icon-btn" + (v.letter || openLetter === key ? " on" : "");
+      mail.innerHTML = v.letter ? MAIL_FILLED_SVG : MAIL_SVG;
+      mail.title = v.letter ? "Сопроводительное письмо" : "Добавить сопроводительное письмо";
+      mail.onclick = () => { openLetter = openLetter === key ? null : key; renderRows(); };
+      box.append(mail);
+      if (v.letter) {
+        const cp = document.createElement("button");
+        cp.className = "icon-btn"; cp.innerHTML = COPY_SVG;
+        cp.title = "Скопировать текст письма";
+        cp.onclick = () => navigator.clipboard.writeText(v.letter)
+          .then(() => toast("Письмо скопировано"), () => toast("Не удалось скопировать"));
+        box.append(cp);
+      }
+      box.append(statusCell(v));
+      const back = document.createElement("button");
+      back.className = "ghost"; back.innerHTML = TRASH_SVG;
+      // ручную запись возвращать некуда — её нет в ленте вакансий, только удалять
+      if (v.source === "manual") {
+        back.title = "Удалить отклик";
+        back.onclick = () => removeJob(v);
+      } else {
+        back.title = "Убрать из откликов — вернуть в вакансии";
+        back.onclick = () => setStatus(v, "Новая", "Возвращена в вакансии");
+      }
+      box.append(back);
+      last.append(box);
+      if (openLetter === key) tr.classList.add("open-letter");
+      tbody.append(tr);
+      if (openLetter === key) tbody.append(letterRow(v));
+      return;
+    }
+    {
+      const box = document.createElement("div"); box.className = "row-actions";
+      if (view === "new") {
+        const apply = document.createElement("button");
+        apply.textContent = "В отклики";
+        apply.title = "Перенести в отклики";
+        apply.onclick = () => setStatus(v, "Новый", "В откликах");
+        const hide = document.createElement("button");
+        hide.className = "ghost"; hide.innerHTML = EYEOFF_SVG;
+        hide.title = "Скрыть вакансию";
+        hide.onclick = () => setStatus(v, "Скрыта", "Скрыто");
+        box.append(apply, hide);
+      } else {
+        const back = document.createElement("button");
+        back.textContent = "Вернуть";
+        back.title = "Вернуть в ленту вакансий";
+        back.onclick = () => setStatus(v, "Новая", "Возвращена в вакансии");
+        box.append(back);
+      }
+      // ручную запись всегда можно удалить — из любой вкладки
+      if (v.source === "manual") {
+        const del = document.createElement("button");
+        del.className = "ghost"; del.innerHTML = TRASH_SVG;
+        del.title = "Удалить отклик";
+        del.onclick = () => removeJob(v);
+        box.append(del);
+      }
+      last.append(box);
+    }
+    tbody.append(tr);
+  });
+  updateFeedShadows();
+}
+
+// --- сопроводительное письмо отклика ----------------------------------------
+// Раскрытая панель под строкой (одна за раз); автосейв с дебаунсом в jobs.json.
+let openLetter = null;
+let letterTimer;
+
+function saveLetter(v) {
+  clearTimeout(letterTimer);
+  letterTimer = setTimeout(async () => {
+    const r = await fetch("/api/letter", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: v.source, id: v.id, letter: v.letter || "" }),
+    });
+    if (!r.ok) toast("Не удалось сохранить письмо");
+  }, 500);
+}
+
+function letterRow(v) {
+  const tr = document.createElement("tr"); tr.className = "letter-row";
+  const td = document.createElement("td"); td.colSpan = 5;
+  const body = document.createElement("div"); body.className = "letter-body";
+  const ta = document.createElement("textarea");
+  ta.className = "letter";
+  ta.placeholder = "Вставь сопроводительное письмо — сохранится само…";
+  ta.value = v.letter || "";
+  const autosize = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  ta.oninput = () => { autosize(); v.letter = ta.value; saveLetter(v); };
+  body.append(ta); td.append(body); tr.append(td);
+  requestAnimationFrame(autosize);
+  return tr;
+}
+
+// Тени-подсказки: сверху — когда есть скрытый контент выше, снизу — ниже.
+function updateFeedShadows() {
+  const box = $("feedbox");
+  $("sh-top").classList.toggle("show", box.scrollTop > 2);
+  $("sh-bottom").classList.toggle("show", box.scrollTop + box.clientHeight < box.scrollHeight - 2);
+}
+$("feedbox").addEventListener("scroll", updateFeedShadows);
+window.addEventListener("resize", updateFeedShadows);
+
+function renderMain() { renderTabs(); renderRows(); }
+
+function render() {
+  renderLevels();
+  renderWords("stopwords", state.stopwords);
+  renderPresets();
+  renderSources();
+  renderWFormats();
+  renderPeriods();
+  renderMain();
+}
+
+// --- сворачивание блоков сайдбара (состояние переживает перезагрузку) -------
+const collapsedBlocks = new Set(JSON.parse(localStorage.getItem("collapsed") || "[]"));
+document.querySelectorAll(".block[data-block]").forEach((b) => {
+  const key = b.dataset.block;
+  b.classList.toggle("closed", collapsedBlocks.has(key));
+  b.querySelector("h2").onclick = () => {
+    if (collapsedBlocks.has(key)) collapsedBlocks.delete(key); else collapsedBlocks.add(key);
+    localStorage.setItem("collapsed", JSON.stringify([...collapsedBlocks]));
+    b.classList.toggle("closed", collapsedBlocks.has(key));
+  };
+});
+
+// --- сеть --------------------------------------------------------------------
+async function load() {
+  const r = await fetch("/api/state");
+  const data = await r.json();
+  if (data.needsSetup) { $("setup").hidden = false; return; }
+  state = data;
+  // отмеченные направления: своё поле конфига; для старых конфигов — те
+  // пресеты, что уже лежат в плоских keywords
+  dirs = new Set((data.directions || []).length
+    ? data.directions
+    : PRESETS.filter((p) => (data.keywords || []).some((k) => k.toLowerCase() === p.toLowerCase())));
+  // формат-критерий из конфига → галочки блока «Формат» (пусто = все включены)
+  if (Array.isArray(data.formats) && data.formats.length) {
+    for (const [label, canon] of Object.entries(FMT_CANON)) {
+      if (data.formats.includes(canon)) hiddenFormats.delete(label);
+      else hiddenFormats.add(label);
+    }
+    localStorage.setItem("hiddenFormats", JSON.stringify([...hiddenFormats]));
+  }
+  $("app").hidden = false;
+  render();
+}
+
+// Автосохранение: шлём конфиг как есть, состояние страницы не трогаем —
+// снятые галочки слов остаются видимыми до перезагрузки, чтобы можно
+// было передумать и вернуть.
+async function save() {
+  const keep = (id, list) => list.filter((w) => !excluded[id].has(w));
+  // слова уровней без снятых галочек; плоские keywords = включённые уровни + направления
+  const levels = (state.levels || []).map((l) => ({
+    name: l.name, on: l.on,
+    keywords: l.keywords.filter((w) => !excludedLvl[l.name]?.has(w)),
+  }));
+  const keywords = [...new Set([
+    ...levels.filter((l) => l.on).flatMap((l) => l.keywords),
+    ...dirs,
+  ])];
+  // структурный срез по грейду: режет «Старший …», даже если заголовок прошёл
+  // по словам направления; вакансии без распознанного грейда фильтр не трогает
+  const GRADES_BY_LEVEL = {
+    intern: ["intern"], junior: ["junior"], middle: ["middle"],
+    senior: ["senior", "staff"], lead: ["lead"], head: ["head", "director", "principal"],
+  };
+  const grades = [...new Set(levels.filter((l) => l.on).flatMap((l) => GRADES_BY_LEVEL[l.name] || []))];
+  // включённые форматы → критерий сбора; все включены = не ограничивать
+  const formats = Object.entries(FMT_CANON)
+    .filter(([label]) => !hiddenFormats.has(label))
+    .map(([, canon]) => canon);
+  const r = await fetch("/api/config", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      keywords,
+      stopwords: keep("stopwords", state.stopwords),
+      levels,
+      grades,
+      formats: formats.length === WORK_FORMATS.length ? [] : formats,
+      sources: Object.fromEntries(state.sources.map((s) => [s.name, s.enabled])),
+      tgDisabled: (state.tgChannels || []).filter((c) => !c.enabled).map((c) => c.name),
+      directions: [...dirs],
+    }),
+  });
+  if (!r.ok) { toast("Ошибка сохранения"); return; }
+  // лента фильтруется текущими критериями на сервере — перечитываем сразу,
+  // чтобы смена галочек отражалась без перезагрузки страницы
+  try {
+    const st = await (await fetch("/api/state")).json();
+    if (st.jobs) { state.jobs = st.jobs; renderMain(); }
+  } catch { /* не критично: лента обновится при следующей загрузке */ }
+}
+
+// подпись этапа прогона по текущему источнику — коротко, в одну строку
+function runStageLabel(source) {
+  if (!source) return "Ищу вакансии";
+  if (source === "telegram") return "Анализирую каналы";
+  return AGGREGATORS.has(source) ? "Изучаю агрегаторы" : "Смотрю компании";
+}
+const SPINNER_SVG = '<svg class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>';
+
+function setRunBusy(btn, label) {
+  btn.innerHTML = `${SPINNER_SVG}<span>${label}</span>`;
+}
+
+async function run() {
+  const btn = $("run"); btn.disabled = true;
+  setRunBusy(btn, "Ищу вакансии");
+  // лог виден только пока идёт прогон; после — сворачивается в ссылку
+  const logEl = $("log"); logEl.hidden = false; logEl.textContent = "";
+  $("log-toggle").hidden = true;
+
+  // живой прогресс: поллим /api/progress — в кнопке спиннер и короткий этап,
+  // под таблицей — лог по мере поступления
+  const poll = setInterval(async () => {
+    try {
+      const p = await (await fetch("/api/progress")).json();
+      if (!p.running) return;
+      logEl.textContent = (p.log || []).join("\n");
+      logEl.scrollTop = logEl.scrollHeight;
+      const last = [...(p.log || [])].reverse().find((l) => /^\[.+\] запрашиваю/.test(l));
+      const cur = last ? last.match(/^\[([^\]]+)\]/)[1] : "";
+      const sourcesDone = (p.log || []).some((l) => /^Совпало с критериями/.test(l));
+      setRunBusy(btn, sourcesDone ? "Фильтрую находки" : runStageLabel(cur));
+    } catch {}
+  }, 700);
+
+  try {
+    const r = await fetch("/api/run", { method: "POST" });
+    const data = await r.json();
+    if (!r.ok) { toast(data.error || "Ошибка прогона"); }
+    else {
+      logEl.textContent = (data.log || []).join("\n");
+      state.jobs = data.jobs || state.jobs;
+      renderWFormats();
+      renderMain();
+      toast(`Найдено новых: ${data.found}`);
+    }
+  } catch (e) {
+    toast("Сервер недоступен");
+  } finally {
+    clearInterval(poll);
+    btn.disabled = false; btn.textContent = "Найти вакансии";
+    logEl.hidden = true;
+    $("log-toggle").hidden = false;
+  }
+}
+$("log-toggle").onclick = () => { $("log").hidden = !$("log").hidden; };
+
+// --- ручной отклик (найденное руками: LinkedIn и пр.) ----------------------
+const LEVELS = ["intern", "junior", "middle", "senior", "lead", "head"];
+
+function fillSelect(elId, values, selected, emptyLabel) {
+  const el = $(elId); el.textContent = "";
+  if (emptyLabel) {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = emptyLabel; el.append(o);
+  }
+  values.forEach((val) => {
+    const o = document.createElement("option");
+    o.value = val; o.textContent = val; o.selected = val === selected;
+    el.append(o);
+  });
+}
+
+// Маска дд.мм.гггг: точки расставляем сами, руками их вводить не нужно.
+function maskDate(e) {
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+  e.target.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)]
+    .filter(Boolean).join(".");
+}
+// дд.мм.гггг → ISO; null, если дата неполная или несуществующая (32.13.2026)
+function parseMasked(s) {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec((s || "").trim());
+  if (!m) return null;
+  const [, dd, mm, yyyy] = m.map(Number);
+  const d = new Date(yyyy, mm - 1, dd);
+  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null;
+  return d.toISOString();
+}
+const today = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+};
+
+function openAdd() {
+  fillSelect("f-level", LEVELS, "", "не указан");
+  fillSelect("f-format", ["удалённо", "гибрид", "офис"], "", "не указан");
+  fillSelect("f-status", STATUSES, "Новый");
+  ["f-title", "f-company", "f-url", "f-letter"].forEach((id) => ($(id).value = ""));
+  $("f-date").value = today();
+  $("add-err").hidden = true;
+  // перехват повторного открытия посреди закрытия: гасим таймер и класс
+  clearTimeout(closeTimer);
+  $("add-drawer").classList.remove("closing");
+  $("add-back").classList.remove("closing");
+  $("add-back").hidden = false; $("add-drawer").hidden = false;
+  document.querySelector(".drawer-body").scrollTop = 0; // всегда открываем с начала
+  $("f-title").focus({ preventScroll: true });
+}
+// Закрываем не мгновенно: даём проиграть обратную анимацию, потом прячем.
+// Таймер, а не animationend — событие не придёт при prefers-reduced-motion.
+const CLOSE_MS = 240;
+let closeTimer = null;
+
+function closeAdd() {
+  const d = $("add-drawer"), b = $("add-back");
+  if (d.hidden) return;
+  d.classList.add("closing"); b.classList.add("closing");
+  clearTimeout(closeTimer);
+  closeTimer = setTimeout(() => {
+    d.hidden = true; b.hidden = true;
+    d.classList.remove("closing"); b.classList.remove("closing");
+  }, CLOSE_MS);
+}
+
+async function saveAdd() {
+  const btn = $("add-save"); const err = $("add-err");
+  const raw = $("f-date").value.trim();
+  const published = raw ? parseMasked(raw) : "";
+  if (raw && !published) {
+    err.textContent = "Дата в формате дд.мм.гггг"; err.hidden = false; $("f-date").focus(); return;
+  }
+  const payload = {
+    title: $("f-title").value,
+    company: $("f-company").value,
+    url: $("f-url").value,
+    letter: $("f-letter").value,
+    level: $("f-level").value,
+    published,
+    status: $("f-status").value,
+    format: $("f-format").value,
+  };
+  if (!payload.title.trim()) {
+    err.textContent = "Укажи название вакансии"; err.hidden = false; $("f-title").focus(); return;
+  }
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/job", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (!r.ok) { err.textContent = data.error || "Не удалось сохранить"; err.hidden = false; return; }
+    state.jobs = data.jobs || state.jobs;
+    view = "applied"; localStorage.setItem("view", view); // сразу показать, куда легло
+    closeAdd(); renderMain();
+    toast("Отклик добавлен");
+  } catch {
+    err.textContent = "Сервер недоступен"; err.hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("add-open").onclick = openAdd;
+$("add-close").onclick = closeAdd;
+$("add-back").onclick = closeAdd;
+$("add-save").onclick = saveAdd;
+$("f-date").addEventListener("input", maskDate);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("add-drawer").hidden) closeAdd();
+});
+
+$("run").onclick = run;
+$("search").oninput = renderRows;
+load();
+</script>
+</body>
+</html>

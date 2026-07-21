@@ -1,0 +1,14 @@
+# личное — остаётся только на твоей машине
+.env
+config.json
+config.json.bak
+profile.md
+master-cv.md
+sources.local/
+data/
+out/
+logs/
+.DS_Store
+
+# локальные настройки Claude Code (пути, разрешения твоей машины)
+.claude/settings.local.json
