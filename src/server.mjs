@@ -119,6 +119,7 @@ function validateList(v, field) {
 
 function applyConfigPatch(current, patch, knownSources) {
   const next = { ...current };
+  if ("onboarded" in patch) next.onboarded = !!patch.onboarded;
   if ("keywords" in patch) next.keywords = validateList(patch.keywords, "keywords");
   if ("directions" in patch) next.directions = validateList(patch.directions, "directions");
   if ("stopwords" in patch) next.stopwords = validateList(patch.stopwords, "stopwords");
@@ -189,6 +190,9 @@ async function handle(req, res) {
       enabled: !tgOff.has(name),
     }));
     return json(res, 200, {
+      // первый запуск: критерии ещё не выбраны — пульт показывает экран онбординга
+      // вместо ленты. Старые конфиги ключа не имеют и считаются настроенными.
+      onboarded: cfg.onboarded !== false,
       keywords: cfg.keywords || [],
       directions: cfg.directions || [],
       stopwords: cfg.stopwords || [],

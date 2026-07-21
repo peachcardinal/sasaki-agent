@@ -343,6 +343,13 @@
   .setup { max-width: 460px; margin: 80px auto; text-align: center; }
   .setup code { background: var(--chip); padding: 2px 6px; border-radius: 5px; }
 
+  /* экран первого запуска: два столбца галочек и кнопка прогона */
+  .onboard { max-width: 520px; text-align: left; }
+  .onboard h2 { margin: 0 0 6px; }
+  .onboard .note { margin: 0 0 22px; color: var(--muted); }
+  .onb-cols { display: flex; gap: 28px; margin-bottom: 24px; }
+  .onb-cols > div { flex: 1; min-width: 0; }
+
   /* --- боковая модалка ручного отклика --- */
   .drawer-back {
     position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 40;
@@ -506,7 +513,24 @@
 
 <div id="setup" class="setup" hidden>
   <h2>Нет конфига</h2>
-  <p>Сначала пройди мастер настройки в терминале: <code>npm run setup</code>, затем обнови страницу.</p>
+  <p>Сначала запусти установку в терминале: <code>npm run setup</code>, затем обнови страницу.</p>
+</div>
+
+<!-- первый запуск: единственное, что нельзя угадать за пользователя, — кого он ищет -->
+<div id="onboard" class="setup onboard" hidden>
+  <h2>Кого ищем?</h2>
+  <p class="note">По этому пойдёт первый поиск. Дальше всё правится слева в пульте — там же источники, формат работы и стоп-слова.</p>
+  <div class="onb-cols">
+    <div>
+      <span class="hint">Направление</span>
+      <div class="opts" id="onb-dirs"></div>
+    </div>
+    <div>
+      <span class="hint">Уровень</span>
+      <div class="opts" id="onb-levels"></div>
+    </div>
+  </div>
+  <button class="primary block-btn" id="onb-go">Найти вакансии</button>
 </div>
 
 <!-- боковая модалка ручного отклика -->
@@ -671,6 +695,39 @@ function renderPresets() {
     }));
   });
 }
+
+// --- экран первого запуска ---------------------------------------------------
+// Те же направления и уровни, что в сайдбаре, но без ленты за спиной: пока
+// критериев нет, показывать нечего. Сохраняем и сразу гоним первый сбор.
+function renderOnboard() {
+  const d = $("onb-dirs"); d.textContent = "";
+  PRESETS.forEach((p) => d.append(optRow(p, dirs.has(p), (on) => {
+    if (on) dirs.add(p); else dirs.delete(p);
+    syncOnboardBtn();
+  })));
+  const l = $("onb-levels"); l.textContent = "";
+  (state.levels || []).forEach((lvl) => l.append(optRow(lvl.name, lvl.on, (on) => {
+    lvl.on = on;
+    syncOnboardBtn();
+  })));
+  syncOnboardBtn();
+}
+
+// Без направления и уровня прогон вернёт пустоту — не пускаем.
+function syncOnboardBtn() {
+  $("onb-go").disabled = dirs.size === 0 || !(state.levels || []).some((l) => l.on);
+}
+
+$("onb-go").onclick = async () => {
+  const btn = $("onb-go");
+  btn.disabled = true;
+  setRunBusy(btn, "Сохраняю критерии");
+  await save();               // save() всегда шлёт onboarded: true
+  $("onboard").hidden = true;
+  $("app").hidden = false;
+  render();
+  await run();                // дальше прогресс виден уже в самом пульте
+};
 
 // --- источники --------------------------------------------------------------
 // Телеграм в общем списке не показываем — вместо него отдельные каналы.
@@ -1223,6 +1280,8 @@ async function load() {
     }
     localStorage.setItem("hiddenFormats", JSON.stringify([...hiddenFormats]));
   }
+  // критерии ещё не выбирали — вместо ленты показываем экран первого запуска
+  if (!data.onboarded) { renderOnboard(); $("onboard").hidden = false; return; }
   $("app").hidden = false;
   render();
 }
@@ -1255,6 +1314,8 @@ async function save() {
   const r = await fetch("/api/config", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({
+      // любое сохранение критериев означает, что экран первого запуска пройден
+      onboarded: true,
       keywords,
       stopwords: keep("stopwords", state.stopwords),
       levels,
@@ -1311,7 +1372,19 @@ async function run() {
   try {
     const r = await fetch("/api/run", { method: "POST" });
     const data = await r.json();
-    if (!r.ok) { toast(data.error || "Ошибка прогона"); }
+    // 409: прогон уже идёт (служба сборщика стартует сразу после установки).
+    // Не ругаемся, а дожидаемся чужого прогона и забираем его результат.
+    if (r.status === 409) {
+      while (true) {
+        await new Promise((ok) => setTimeout(ok, 700));
+        let p;
+        try { p = await (await fetch("/api/progress")).json(); } catch { break; }
+        if (!p.running) break;
+      }
+      const st = await (await fetch("/api/state")).json();
+      if (st.jobs) { state.jobs = st.jobs; renderWFormats(); renderMain(); }
+      toast("Прогон завершён");
+    } else if (!r.ok) { toast(data.error || "Ошибка прогона"); }
     else {
       logEl.textContent = (data.log || []).join("\n");
       state.jobs = data.jobs || state.jobs;
