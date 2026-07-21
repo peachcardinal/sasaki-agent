@@ -12,28 +12,55 @@ const API = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/sea
 const PAGE = 10;
 const MAX_PAGES = 4;
 
+// LinkedIn ищет ОДНОЙ фразой: оператор OR он не понимает (склейка вида
+// «design lead OR head of design» цеплялась за любое «head of» — приходили
+// медцентры и стройка), а кириллица в его индексе почти не работает. Поэтому
+// направления пульта переводим в короткие английские запросы и делаем по
+// запросу на направление. Проверено: «product designer» / Worldwide даёт
+// 40 из 40 релевантных, «дизайнер» / Russia — 0 из 10.
+const DIRECTION_QUERY = {
+  "продуктовый дизайн": "product designer",
+  "ux ui": "ux designer",
+  "web дизайн": "web designer",
+  "графический дизайн": "graphic designer",
+  "motion дизайн": "motion designer",
+  "иллюстрация": "illustrator",
+};
+const norm = (s) => String(s || "").toLowerCase().replace(/[/\-–—]+/g, " ").replace(/\s+/g, " ").trim();
+
+// Что искать: явный linkedin.keywords (строкой или списком) → перевод выбранных
+// направлений → первое ключевое слово. Никаких OR-склеек.
+function queriesFor(cfg, lcfg) {
+  if (lcfg.keywords) return [].concat(lcfg.keywords).filter(Boolean);
+  const fromDirs = (cfg.directions || []).map((d) => DIRECTION_QUERY[norm(d)]).filter(Boolean);
+  if (fromDirs.length) return [...new Set(fromDirs)].slice(0, 3); // больше 3 — лишние запросы
+  return (cfg.keywords || []).slice(0, 1);
+}
+
 export async function fetchLinkedin(cfg) {
   const lcfg = cfg.linkedin || {};
-  const keywords = lcfg.keywords || (cfg.keywords || []).slice(0, 4).join(" OR ");
+  const queries = queriesFor(cfg, lcfg);
+  if (!queries.length) return [];
+  // Worldwide по умолчанию: индекс LinkedIn по России даёт почти сплошной мусор
   const location = lcfg.location || "Worldwide";
   const sinceSec = Math.round((lcfg.sinceHours ?? 168) * 3600);
 
-  const base = new URLSearchParams({ keywords, location, f_TPR: `r${sinceSec}` });
-  if (lcfg.remoteOnly) base.set("f_WT", "2");
-
   const byId = new Map();
-  for (let page = 0; page < MAX_PAGES; page++) {
-    base.set("start", String(page * PAGE));
-    const res = await fetch(`${API}?${base}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },
-    });
-    if (res.status === 429) throw new Error("LinkedIn 429 (частим — увеличь интервал)");
-    if (!res.ok) throw new Error(`LinkedIn HTTP ${res.status}`);
-    const html = await res.text();
-    const cards = parseCards(html);
-    for (const c of cards) byId.set(c.id, c);
-    if (cards.length < PAGE) break; // страница неполная — дальше пусто
-    await new Promise((r) => setTimeout(r, 800)); // LinkedIn чувствителен к частоте
+  for (const keywords of queries) {
+    const base = new URLSearchParams({ keywords, location, f_TPR: `r${sinceSec}` });
+    if (lcfg.remoteOnly) base.set("f_WT", "2");
+    for (let page = 0; page < MAX_PAGES; page++) {
+      base.set("start", String(page * PAGE));
+      const res = await fetch(`${API}?${base}`, {
+        headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },
+      });
+      if (res.status === 429) throw new Error("LinkedIn 429 (частим — увеличь интервал)");
+      if (!res.ok) throw new Error(`LinkedIn HTTP ${res.status}`);
+      const cards = parseCards(await res.text());
+      for (const c of cards) byId.set(c.id, c);
+      if (cards.length < PAGE) break; // страница неполная — дальше пусто
+      await new Promise((r) => setTimeout(r, 800)); // LinkedIn чувствителен к частоте
+    }
   }
   return [...byId.values()];
 }
