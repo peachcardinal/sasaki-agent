@@ -770,8 +770,10 @@ function workFormat(v) {
   // не выдумываем «офис» по названию города
   if (v.formatUnknown) return "не указан";
   const s = (v.location || "").toLowerCase();
-  if (/гибрид|hybrid/.test(s)) return "гибрид";
+  // Удалёнку проверяем первой: вакансия «удалённо или гибрид» (hh отдаёт обе
+  // метки) для ищущего — прежде всего удалёнка, её и показываем.
   if (/удал[её]н|remote|дистанц/.test(s)) return "удалённо";
+  if (/гибрид|hybrid/.test(s)) return "гибрид";
   if (s.replace(/[·,|/]|\d{4}-\d{2}-\d{2}|lead|senior|middle|junior|стажер|стажёр/g, "").trim()) return "офис";
   return "не указан";
 }

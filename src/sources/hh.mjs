@@ -51,9 +51,45 @@ export async function fetchHH(cfg) {
     if (hcfg.area) params.set("area", String(hcfg.area));
     if (hcfg.period) params.set("period", String(hcfg.period));
     if (hcfg.remoteOnly) params.set("schedule", "remote");
-    for (const v of parseItems(await fetchFeed(`${RSS}?${params}`))) byId.set(v.id, v);
+
+    const items = parseItems(await fetchFeed(`${RSS}?${params}`));
+    // Формат работы сама лента не отдаёт, но поиск умеет по нему фильтровать.
+    // Два добора той же выдачи с work_format=REMOTE/HYBRID дают списки id, по
+    // которым формат проставляется. Вакансия может быть в обоих сразу — это и
+    // есть «удалённо или гибрид» на сайте. Отключается hh.detectFormat: false.
+    if (hcfg.detectFormat !== false) {
+      const remote = await idsFor(params, "REMOTE");
+      const hybrid = await idsFor(params, "HYBRID");
+      for (const v of items) applyFormat(v, remote.has(v.id), hybrid.has(v.id));
+    }
+    for (const v of items) byId.set(v.id, v);
   }
   return [...byId.values()];
+}
+
+// id вакансий той же выдачи, суженной по формату работы. Сбой добора не должен
+// ронять источник: формат — приятное дополнение, вакансии важнее.
+async function idsFor(params, workFormat) {
+  await sleep(PAUSE);
+  const q = new URLSearchParams(params);
+  q.set("work_format", workFormat);
+  try {
+    return new Set(parseItems(await fetchFeed(`${RSS}?${q}`)).map((v) => v.id));
+  } catch {
+    return new Set();
+  }
+}
+
+// Формат кодируем в location, как остальные источники: и фильтр, и пульт
+// читают формат оттуда. Не нашлось ни в одном списке — честно не знаем:
+// в суженную выдачу тоже попадают только 20 свежих, так что отсутствие
+// вакансии в ней ничего не доказывает.
+function applyFormat(v, isRemote, isHybrid) {
+  if (!isRemote && !isHybrid) return;
+  const region = v.location;
+  v.location = [isRemote ? `удалённо${region ? ` (${region})` : ""}` : region, isHybrid ? "гибрид" : ""]
+    .filter(Boolean).join(" ");
+  delete v.formatUnknown;
 }
 
 async function fetchFeed(url) {
