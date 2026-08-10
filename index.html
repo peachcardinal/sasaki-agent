@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>sasaki — агент, который сам ищет тебе работу</title>
+<meta name="description" content="Локальный агент поиска работы для дизайнеров. Раз в 6 часов сам обходит два десятка источников, отбирает подходящее и складывает в пульт с трекером откликов. Всё на твоём компьютере." />
+
+<meta property="og:title" content="sasaki — агент, который сам ищет тебе работу" />
+<meta property="og:description" content="Раз в 6 часов сам обходит два десятка источников, отбирает подходящее по твоим критериям и складывает в локальный пульт с трекером откликов." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="screenshot.png" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --ink:     #14140f;
+    --ink-2:   #5c5c55;
+    --ink-3:   #8e8e86;
+    --line:    #e6e6e0;
+    --accent:  #14140f;          /* без цветного акцента — монохром */
+    /* подложка иконок — не сплошная, а чёрный с прозрачностью:
+       так она подхватывает то, что под плашкой */
+    --tint: rgba(20, 20, 15, .07);
+    --plate:   rgba(255,255,255,.60);
+    --plate-on: rgba(255,255,255,.90);
+    --gap: 4px;
+    --pad: 10px;
+    --head: 36px;
+    --r: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; color: var(--ink);
+    font-family: "Schibsted Grotesk", system-ui, sans-serif;
+    font-size: 16px; line-height: 1.5; letter-spacing: -.006em;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;                    /* один экран, без скролла */
+  }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: var(--accent); color: #fff; }
+  .mono { font-family: "Space Mono", ui-monospace, monospace; }
+
+  /* фон-видео */
+  /* запасной цвет = доминанта ролика, чтобы до загрузки не мигало другим тоном */
+  .bgv { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; background: #7aa8e0; }
+  /* вуаль еле заметная: кадр и так светлый, а текст лежит на своих плашках */
+  .bgv-scrim { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(240,240,238,.06), rgba(240,240,238,.18)); }
+
+  /* ── сцена: ряд плашек всегда по центру экрана ──────── */
+  .stage {
+    position: relative; z-index: 1;
+    height: 100dvh; padding: var(--pad);
+    display: flex; align-items: center;          /* ряд зафиксирован по центру */
+  }
+  .tabs {
+    width: 100%; height: var(--head);            /* высота ряда неизменна — центр не «плавает» */
+    display: flex; gap: var(--gap); align-items: flex-start;
+  }
+
+  /* плашка = кнопка, которая сама растягивается вниз */
+  .plate {
+    flex: 1 1 0; min-width: 0; height: var(--head); overflow: hidden;
+    display: flex; flex-direction: column;
+    border: 1px solid rgba(255,255,255,.5); border-radius: var(--r);
+    background: var(--plate); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3);
+    font: inherit; color: inherit; text-align: left;
+    transition: height .5s cubic-bezier(.22,.9,.2,1), background .25s ease;
+  }
+  .plate:hover { background: rgba(255,255,255,.78); }
+  /* от центра вниз до нижнего края минус отступ: 50dvh + половина ряда − отступ */
+  .plate.active { height: calc(50dvh + var(--head) / 2 - var(--pad)); background: var(--plate-on); }
+
+  .head {
+    flex: none; height: var(--head); width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 0 10px; background: none; border: 0; cursor: pointer;
+    font: inherit; color: inherit; text-align: left;
+  }
+  .head .ttl { font-size: 13px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* первая плашка — имя проекта: капсом и жирным */
+  .plate.brand .ttl { text-transform: uppercase; font-weight: 700; letter-spacing: .04em; }
+  .head .ico { flex: none; display: grid; place-items: center; width: 18px; height: 18px; color: var(--ink); transition: transform .42s cubic-bezier(.22,.9,.2,1); }
+  .head .ico svg { width: 100%; height: 100%; }
+  .plate.active .head .ico { transform: rotate(45deg); }
+  .plate.link .head .ico { transform: none; position: relative; }
+  /* ховер по github-плашке: та же полупрозрачная подложка с блюром, что у
+     остальных, только белый заменён на оранжевый — видео продолжает просвечивать */
+  .plate.link:hover { background: rgba(255, 128, 0, .78); border-color: rgba(255, 128, 0, .5); }
+  /* Ховер по github-плашке: лого уезжает вверх-вправо и гаснет, на его место
+     снизу-слева приходит стрелка «наружу». Обе иконки лежат стопкой. */
+  .ico-swap svg {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    transition: opacity .26s ease, transform .32s cubic-bezier(.22,.9,.2,1);
+  }
+  .ico-swap .i-out { opacity: 0; transform: translate(-5px, 5px); }
+  .plate.link:hover .ico-swap .i-gh { opacity: 0; transform: translate(5px, -5px); }
+  .plate.link:hover .ico-swap .i-out { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .ico-swap svg { transition: opacity .2s ease; transform: none !important; }
+  }
+
+  .body {
+    /* по бокам и снизу — как у шапки, сверху вдвое больше */
+    flex: 1; min-height: 0; overflow: auto; padding: 20px 10px 10px;
+    /* visibility, а не только opacity: иначе ссылки и кнопки внутри свёрнутой
+       плашки остаются в порядке табуляции, и с клавиатуры можно попасть на то,
+       чего не видно. Скрываем после того, как отработало затухание. */
+    opacity: 0; visibility: hidden;
+    transition: opacity .3s ease .1s, visibility 0s linear .4s;
+  }
+  .plate.active .body {
+    opacity: 1; visibility: visible;
+    transition: opacity .3s ease .1s, visibility 0s;
+  }
+
+  /* ── контент узкой колонкой ────────────────────────── */
+  /* переносы отдаём браузеру: жёсткие <br> в узкой колонке рвали строку не там */
+  h1 { margin: 0; font-weight: 500; font-size: clamp(1.1rem, 1.45vw, 1.35rem); line-height: 1.12; letter-spacing: -.025em; text-wrap: balance; }
+  .lead { margin: 12px 0 0; color: var(--ink-2); font-size: 13px; line-height: 18px; }
+
+  /* margin целиком, а не только -top: иначе у <p> остаётся браузерный
+     нижний отступ и под блоком копится лишнее место */
+  .meta { margin: 12px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-2); }
+  .meta a { text-decoration: none; }
+  .meta a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+
+  /* скриншот пульта — на всю ширину плашки */
+  .shot { display: block; width: 100%; height: auto; margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; }
+
+  /* установка — все блоки кода выглядят одинаково, у каждого своя кнопка копирования */
+  .code {
+    position: relative; margin-top: 8px;
+    background: rgba(20, 20, 15, .06); border-radius: 7px; padding: 10px 36px 10px 11px;
+    font-family: "Space Mono", monospace; font-size: 11px; line-height: 1.75;
+    color: var(--ink);
+    /* pre-wrap держит переводы строк; ломаем только то, что не влезает
+       целиком (длинный URL), а не каждое слово подряд */
+    white-space: pre-wrap; word-break: normal; overflow-wrap: break-word;
+  }
+  .code .pr { color: var(--ink-3); user-select: none; }
+  .code .cm { color: var(--ink-3); display: block; margin-bottom: 5px; }
+  .cbtn {
+    position: absolute; top: 7px; right: 7px; width: 22px; height: 22px;
+    display: grid; place-items: center; border: 0; border-radius: 5px; cursor: pointer;
+    background: rgba(20, 20, 15, .07); color: var(--ink-2); transition: background .16s;
+  }
+  .cbtn:hover, .cbtn.done { background: rgba(20, 20, 15, .16); }
+  .cbtn svg { width: 12px; height: 12px; }
+  /* .item p обнуляет margin, поэтому селектор должен быть не слабее */
+  .item .req { margin: 8px 0 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.45; }
+
+  /* как работает — простой список без плашек, тайтл справа от иконки */
+  .item + .item { margin-top: 18px; }
+  .ihead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .ihead .ic { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--tint); display: grid; place-items: center; }
+  .ihead .ic svg { width: 13px; height: 13px; stroke: var(--ink); fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  /* тот же стиль, что у подписей плашек */
+  .ihead h3 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; }
+  .item p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+
+  /* ── адаптив ───────────────────────────────────────── */
+  /* Узкий экран: в ряд четыре подписи не влезают, а при переносе в 2×2
+     растянутая плашка распирает строку и вторая пара уезжает за экран.
+     Поэтому на мобильном — вертикальный стек, активная тянется вниз. */
+  @media (max-width: 720px) {
+    .tabs { flex-direction: column; height: auto; }
+    .plate { flex: none; width: 100%; }
+    /* экран минус отступы и три свёрнутые плашки с гэпами */
+    .plate.active { height: calc(100dvh - var(--pad) * 2 - (var(--head) + var(--gap)) * 3); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Фоновое видео. Свой ролик — в docs/bg.mp4 (muted-loop). Пока файла нет — запасной цвет. -->
+<video class="bgv" autoplay muted loop playsinline preload="auto">
+  <source src="bg.mp4" type="video/mp4" />
+</video>
+<div class="bgv-scrim"></div>
+
+<div class="stage">
+  <div class="tabs">
+
+    <!-- 1 · sasaki -->
+    <section class="plate brand active" id="p1">
+      <button class="head" aria-expanded="true" aria-controls="b1">
+        <span class="ttl">sasaki-agent</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </button>
+      <div class="body" id="b1">
+        <h1>Находи дизайн-вакансии по своим запросам в одном месте</h1>
+        <p class="lead">Локальный агент, который ищет тебе работу — сам, каждые 6 часов, пока ты занят делом</p>
+        <img class="shot" src="screenshot.png" alt="Пульт sasaki: слева фильтры по уровню, направлению и формату, справа лента найденных вакансий с трекером откликов" loading="lazy" />
+        <p class="meta">Node.js 21+ &nbsp;·&nbsp; MIT &nbsp;·&nbsp; <a href="https://10byrs.com" target="_blank" rel="noopener">by 10byrs</a></p>
+      </div>
+    </section>
+
+    <!-- 2 · установка -->
+    <section class="plate" id="p2">
+      <button class="head" aria-expanded="false" aria-controls="b2">
+        <span class="ttl">Установка</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </button>
+      <div class="body" id="b2">
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></span>
+            <h3>Одной строкой</h3>
+          </div>
+          <p>Самый быстрый путь: скопируй и вставь в терминал. Склонирует проект, поставит автозапуск и откроет пульт.</p>
+          <div class="code"><button class="cbtn" data-copy="git clone https://github.com/peachcardinal/sasaki-agent.git &amp;&amp; cd sasaki-agent &amp;&amp; npm run setup" aria-label="Скопировать команду"></button><span class="pr">$ </span>git clone …/sasaki-agent &amp;&amp; npm run setup</div>
+          <p class="req">Нужен только Node.js 21+ — проверить: node -v</p>
+        </div>
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="m5 17 6-5-6-5M13 19h6"/></svg></span>
+            <h3>По шагам</h3>
+          </div>
+          <p>То же самое тремя командами, если хочется видеть каждый шаг:</p>
+          <div class="code"><button class="cbtn" data-copy="git clone https://github.com/peachcardinal/sasaki-agent.git&#10;cd sasaki-agent&#10;npm run setup" aria-label="Скопировать команды"></button><span class="pr">$ </span>git clone https://github.com/peachcardinal/sasaki-agent.git
+<span class="pr">$ </span>cd sasaki-agent
+<span class="pr">$ </span>npm run setup</div>
+        </div>
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8"/></svg></span>
+            <h3>Или попроси агента</h3>
+          </div>
+          <p>Есть Claude Code или другой кодовый агент? Скажи ему в пустой папке:</p>
+          <div class="code"><button class="cbtn" data-copy="Установи мне агента из github.com/peachcardinal/sasaki-agent — склонируй, запусти установку и расскажи, как пользоваться" aria-label="Скопировать запрос"></button><span class="cm">// вставь как есть</span>Установи мне агента из github.com/peachcardinal/sasaki-agent — склонируй, запусти установку и расскажи, как пользоваться</div>
+          <p class="req">Установка неинтерактивная — агент не застрянет на вопросах</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · как работает -->
+    <section class="plate" id="p3">
+      <button class="head" aria-expanded="false" aria-controls="b3">
+        <span class="ttl">Как работает</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      </button>
+      <div class="body" id="b3">
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+            <h3>Обходит источники сам</h3>
+          </div>
+          <p>Раз в 6 часов, в фоне. 19 источников из коробки: hh.ru, LinkedIn, getmatch,
+            Хабр Карьера, designer.ru, hirehi, finder, Telegram, Яндекс, VK, Т-Банк, Авито,
+            X5, МТС, Магнит, Wildberries, Точка, Альфа-Банк, 2ГИС и любой другой сайт.</p>
+        </div>
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="M3 5h18M6 12h12M10 19h4"/></svg></span>
+            <h3>Отбирает по критериям</h3>
+          </div>
+          <p>Направление, уровень, формат работы. Дубли между источниками отсеивает, показанное не повторяет.</p>
+        </div>
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg></span>
+            <h3>Понимает ключевые и стоп-слова</h3>
+          </div>
+          <p>Если фильтра по направлению мало — задаёшь свои ключевые фразы и стоп-слова. Стоп-слово убирает вакансию из ленты при любом упоминании: так отсекается чужая тематика и нежелательные грейды.</p>
+        </div>
+        <div class="item">
+          <div class="ihead">
+            <span class="ic"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span>
+            <h3>Хранит твои отклики</h3>
+          </div>
+          <p>Воронка Новый → Отклик → Собес → Тестовое → Оффер, рядом — сопроводительное письмо. Всё на твоём компьютере.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 · github -->
+    <a class="plate link" href="https://github.com/peachcardinal/sasaki-agent" target="_blank" rel="noopener">
+      <span class="head">
+        <span class="ttl">GitHub</span>
+        <span class="ico ico-swap">
+          <svg class="i-gh" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          <svg class="i-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        </span>
+      </span>
+    </a>
+
+  </div>
+</div>
+
+<script>
+  // Щелчок по клику. Аудиофайла не держим — звук синтезируется Web Audio:
+  // ничего не качается, страница остаётся самодостаточной.
+  var click = (function () {
+    var ctx = null;
+    return function () {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!ctx) ctx = new AC();
+        if (ctx.state === "suspended") ctx.resume();
+        var t = ctx.currentTime;
+
+        // шумовой транзиент — сама «щёлкающая» атака
+        var len = Math.floor(ctx.sampleRate * 0.03);
+        var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        var d = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 8);
+        var noise = ctx.createBufferSource(); noise.buffer = buf;
+        var bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2200; bp.Q.value = 1.2;
+        var ng = ctx.createGain(); ng.gain.value = 0.3;   // громкость щелчка
+        noise.connect(bp); bp.connect(ng); ng.connect(ctx.destination);
+        noise.start(t);
+
+        // короткий тон вниз — «тело» щелчка, чтобы не звучало как шипение
+        var osc = ctx.createOscillator(); osc.type = "triangle";
+        osc.frequency.setValueAtTime(620, t);
+        osc.frequency.exponentialRampToValueAtTime(320, t + 0.05);
+        var og = ctx.createGain();
+        og.gain.setValueAtTime(0.0001, t);
+        og.gain.exponentialRampToValueAtTime(0.22, t + 0.005);
+        og.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+        osc.connect(og); og.connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.1);
+      } catch (e) { /* нет Web Audio — просто без звука */ }
+    };
+  })();
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest(".head, .cbtn, .plate.link")) click();
+  });
+
+  // На узком экране при заходе все плашки свёрнуты: раскрытая занимает почти
+  // весь экран и прячет остальные. На десктопе первая открыта, как в разметке.
+  (function () {
+    if (!window.matchMedia || !window.matchMedia("(max-width: 720px)").matches) return;
+    [].slice.call(document.querySelectorAll(".plate.active")).forEach(function (p) {
+      p.classList.remove("active");
+      var h = p.querySelector(".head");
+      if (h) h.setAttribute("aria-expanded", "false");
+    });
+  })();
+
+  // аккордеон: открыта ровно одна плашка, повторный клик закрывает
+  (function () {
+    var plates = [].slice.call(document.querySelectorAll(".plate:not(.link)"));
+    plates.forEach(function (p) {
+      p.querySelector(".head").addEventListener("click", function () {
+        var was = p.classList.contains("active");
+        plates.forEach(function (o) {
+          o.classList.remove("active");
+          o.querySelector(".head").setAttribute("aria-expanded", "false");
+        });
+        if (!was) {
+          p.classList.add("active");
+          p.querySelector(".head").setAttribute("aria-expanded", "true");
+        }
+      });
+    });
+  })();
+
+  // копирование: одна логика на все блоки кода, текст берётся из data-copy
+  (function () {
+    var COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    var DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+    function legacy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    [].slice.call(document.querySelectorAll(".cbtn")).forEach(function (btn) {
+      btn.innerHTML = COPY;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var text = btn.dataset.copy;
+        function done() {
+          btn.classList.add("done"); btn.innerHTML = DONE;
+          setTimeout(function () { btn.classList.remove("done"); btn.innerHTML = COPY; }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () { legacy(text); done(); });
+        } else { legacy(text); done(); }
+      });
+    });
+  })();
+</script>
+</body>
+</html>
