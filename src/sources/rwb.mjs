@@ -1,11 +1,12 @@
-// RWB (Wildberries): открытый API карьерного сайта. Дизайн = direction_ids[]=11.
+// RWB (Wildberries): открытый API карьерного сайта. direction_ids задаются в конфиге.
 // Даты публикации нет НИГДЕ: ни в списке, ни в детальной /vacancies/<id>
 // (проверены все поля ответа), ни на странице вакансии (SPA без дат) —
 // published остаётся пустым, пайплайн подставит момент первого обнаружения.
 const API = "https://career.rwb.ru/crm-api/api/v1/pub/vacancies";
 
 export async function fetchRwb(cfg) {
-  const ids = cfg.rwb?.directionIds || [11];
+  const ids = cfg.rwb?.directionIds || [];
+  if (!ids.length) return [];
   const qs = ids.map((i) => `direction_ids%5B%5D=${i}`).join("&");
   const res = await fetch(`${API}?${qs}`, {
     headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },

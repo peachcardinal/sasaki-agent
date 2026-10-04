@@ -8,15 +8,9 @@ function normalize(s) {
     .trim();
 }
 
-// Ру↔англ эквиваленты слов из названий ролей: ключевые слова матчатся в обе
-// стороны («дизайн лид» найдёт «Design Lead» и наоборот) — вводить оба языка
-// вручную не нужно. Слово слева и слово справа считаются взаимозаменяемыми.
+// Эквиваленты грейдов и близких инженерных ролей.
 const SYNONYM_PAIRS = [
-  // роль
-  ["дизайнер", "designer"], ["дизайн", "design"],
-  ["проектировщик", "designer"], ["иллюстратор", "illustrator"],
-  ["креатор", "creator"], ["исследователь", "researcher"],
-  ["писатель", "writer"], ["редактор", "editor"],
+  ["исследователь", "researcher"], ["учёный", "scientist"],
   // грейды и руководство — вся лестница
   ["стажер", "intern"], ["стажер", "trainee"],
   ["младший", "junior"], ["джуниор", "junior"],
@@ -27,21 +21,8 @@ const SYNONYM_PAIRS = [
   ["эксперт", "expert"],
   ["руководитель", "head"], ["глава", "head"], ["директор", "director"],
   ["менеджер", "manager"],
-  // область
-  ["продуктовый", "product"], ["продукт", "product"],
-  ["графический", "graphic"], ["графика", "graphics"],
-  ["коммуникационный", "communication"], ["визуальный", "visual"],
-  ["интерфейс", "interface"], ["интерфейс", "ui"],
-  ["арт", "art"], ["бренд", "brand"], ["айдентика", "identity"],
-  ["моушн", "motion"], ["веб", "web"], ["мобильный", "mobile"],
-  ["креативный", "creative"], ["иллюстрация", "illustration"],
-  // «иллюстрация» (направление в пульте) и «иллюстратор» (роль в вакансии) —
-  // разные слова, префиксом не сходятся; мостим кластеры, иначе направление
-  // «иллюстрация» не находило ни одного иллюстратора
-  ["иллюстрация", "иллюстратор"], ["illustration", "illustrator"],
-  ["исследование", "research"], ["юзабилити", "usability"],
-  ["система", "system"],
-  // чужие профессии — нужны, чтобы СТОП-слова работали на обоих языках
+  ["машинное обучение", "machine learning"],
+  // Эти пары нужны, чтобы стоп-слова одинаково действовали на русском и английском.
   ["аналитик", "analyst"], ["разработчик", "developer"],
   ["инженер", "engineer"], ["тестировщик", "qa"],
   ["маркетолог", "marketer"], ["рекрутер", "recruiter"],
@@ -53,9 +34,8 @@ for (const [a, b] of SYNONYM_PAIRS) {
   SYNONYMS.set(b, (SYNONYMS.get(b) || new Set()).add(a));
 }
 
-// Слово ключевой фразы + его эквиваленты. Словарь ищется по префиксу в обе
-// стороны, чтобы падежи не мешали («дизайна» → «дизайн» → design), и с одним
-// транзитивным шагом: дизайнер → designer → проектировщик.
+// Слово ключевой фразы + его эквиваленты. Словарь ищется по префиксу, чтобы
+// русские окончания и формы слов не мешали совпадению.
 function variants(word) {
   const out = new Set([word]);
   for (const [key, set] of SYNONYMS) {
@@ -69,16 +49,13 @@ function variants(word) {
   return [...out];
 }
 
-// Слово заголовка засчитывается варианту: кириллица — по префиксу (падежи:
-// «дизайна» ← «дизайн»), латиница — точно или с плюралом («designers» ←
-// «designer»), но НЕ префиксом: иначе product матчил бы production.
+// Кириллица сравнивается по префиксу (падежи), латиница — точно или с плюралом,
+// но не по префиксу: иначе "ml" матчил бы лишние слова.
 function wordHits(w, v) {
   return /^[a-z0-9]/.test(v) ? w === v || w === v + "s" : w.startsWith(v);
 }
 
-// Ключевая фраза совпадает, если КАЖДОЕ её слово (или его перевод) находится
-// среди слов заголовка: «дизайн лид» найдёт и «Продуктовый дизайн-лидер»
-// (дефисы нормализация режет в пробелы), и «Design Lead».
+// Ключевая фраза совпадает, если каждое её слово (или эквивалент) есть в заголовке.
 function keywordMatches(titleWords, keyword) {
   return normalize(keyword)
     .split(" ")
@@ -118,7 +95,7 @@ const GRADE_WORDS = {
   директор: "director", director: "director",
 };
 
-// Все грейды, упомянутые в тексте: «Middle/Senior Designer» → [middle, senior].
+// Все грейды, упомянутые в тексте: «Middle/Senior Engineer» → [middle, senior].
 export function inferGrades(text) {
   const found = new Set();
   for (const w of normalize(text).split(" ")) {
@@ -129,46 +106,10 @@ export function inferGrades(text) {
   return [...found];
 }
 
-// --- Область дизайна ---------------------------------------------------------
-// Слово заголовка → область (правила совпадения как в wordHits: кириллица по
-// префиксу, латиница точно). Используется при выбранных направлениях: вакансия,
-// в заголовке которой названа ЧУЖАЯ область, режется, даже если заголовок совпал
-// с фразой уровня («Ведущий дизайнер айдентики» при направлении «продуктовый
-// дизайн»). Область не названа — не режем.
-const AREA_WORDS = {
-  продукт: "product", product: "product",
-  интерфейс: "uxui", ux: "uxui", ui: "uxui", юзабилити: "uxui", usability: "uxui",
-  веб: "web", web: "web", сайт: "web", лендинг: "web", landing: "web",
-  график: "graphic", графич: "graphic", graphic: "graphic", полиграф: "graphic",
-  коммуникацион: "communication", communication: "communication",
-  бренд: "identity", brand: "identity", branding: "identity",
-  айдентик: "identity", identity: "identity", логотип: "identity", logo: "identity",
-  упаков: "identity", packaging: "identity",
-  моушн: "motion", motion: "motion", аниматор: "motion", анимац: "motion",
-  animation: "motion", animator: "motion",
-  иллюстратор: "illustration", иллюстрац: "illustration",
-  illustration: "illustration", illustrator: "illustration", художник: "illustration",
-};
-
-// Пресет направления из пульта → какие области ему «свои» (ключи нормализованы).
-const DIRECTION_AREAS = {
-  "продуктовый дизайн": ["product", "uxui"],
-  "ux ui": ["uxui", "product"],
-  "web дизайн": ["web", "uxui"],
-  "графический дизайн": ["graphic", "identity", "communication", "illustration"],
-  "motion дизайн": ["motion"],
-  "иллюстрация": ["illustration"],
-};
-
-// Метка направления не всегда = ключевому слову роли. «UX/UI» нормализуется в
-// фразу «ux ui» и требовала БЫ оба слова разом — но UX и UI это альтернативы,
-// поэтому раскрываем в два отдельных слова (OR). «web дизайн» добираем «сайтами».
-// Прочие метки совпадают с ролью («графический дизайн» → «графический дизайнер»
-// через префикс) — для них берётся сама метка. Иллюстрация покрыта синонимом
-// иллюстрация↔иллюстратор.
 const DIRECTION_KEYWORDS = {
-  "ux ui": ["ux", "ui"],
-  "web дизайн": ["web дизайн", "веб дизайн", "дизайнер сайтов", "web designer"],
+  "ml ai engineer": ["machine learning engineer", "ml engineer", "ai engineer", "искусственный интеллект", "машинного обучения", "машинное обучение"],
+  "computer vision engineer": ["computer vision engineer", "cv engineer", "специалист компьютерного зрения", "инженер компьютерного зрения", "машинного зрения"],
+  "nlp llm engineer": ["nlp engineer", "llm engineer", "генеративный ии", "обработки естественного языка", "языковых моделей"],
 };
 
 // Эффективный список ключевых слов роли: направления, раскрытые в матчащиеся
@@ -177,57 +118,6 @@ const DIRECTION_KEYWORDS = {
 export function roleKeywords(cfg) {
   const expanded = (cfg.directions || []).flatMap((d) => DIRECTION_KEYWORDS[normalize(d)] || [d]);
   return [...new Set([...expanded, ...(cfg.keywords || [])])];
-}
-
-// Кусок описания, по которому честно судить об области, — блок обязанностей.
-// Полный текст шумит боилерплейтом о компании: у сети оптики «лучший оптический
-// ПРОДУКТ» давал ложный product, хотя обязанности — чистая графика. Блока нет —
-// возвращаем весь текст (лучше шумный сигнал, чем никакого).
-const DUTIES_START = /(?:обязанност\w*|задач[аи]\w*|что предстоит|чем предстоит заниматься|что делать|you will|responsibilit\w*)\s*:?/i;
-const DUTIES_END = /(?:требован\w*|услови\w*|мы предлагаем|предлагаем|ожидан\w*|будет плюсом|о компании|оформлен\w*|график работы|этапы|requirements|we offer|benefits)\s*:?/i;
-
-export function dutiesOf(text) {
-  const s = String(text || "");
-  const start = s.search(DUTIES_START);
-  if (start < 0) return s;
-  const rest = s.slice(start);
-  const end = rest.slice(20).search(DUTIES_END); // 20 — не споткнуться о сам заголовок
-  return end < 0 ? rest : rest.slice(0, end + 20);
-}
-
-export function areasOf(text) {
-  const found = new Set();
-  for (const w of normalize(text).split(" ")) {
-    for (const [key, area] of Object.entries(AREA_WORDS)) {
-      if (wordHits(w, key)) found.add(area);
-    }
-  }
-  return [...found];
-}
-
-// Специализацию ищем в ОСНОВНОЙ части заголовка: то, что в скобках, — это, как
-// правило, охват продукта, а не область дизайна. «Design Team Lead (Web, TV &
-// Auto)» — продуктовый лид в Звуке, но слово Web из скобок делало его
-// веб-дизайнером и выбрасывало у всех, кто выбрал продуктовый дизайн.
-const withoutParens = (s) => String(s || "").replace(/\([^)]*\)/g, " ");
-
-function areaOk(item, dirs) {
-  if (!dirs?.length) return true;
-  const allowed = new Set(dirs.flatMap((d) => DIRECTION_AREAS[normalize(d)] || []));
-  if (!allowed.size) return true; // своё (нестандартное) направление — не судим
-  const found = areasOf(withoutParens(item.title));
-  if (!found.length) {
-    // Заголовок области не назвал («Ведущий дизайнер») — смотрим item.areas:
-    // источник мог определить область по полному описанию (finder — детальная
-    // страница, телеграм — текст поста). Так «Ведущий дизайнер» в бренд-команду
-    // режется при направлении «продуктовый», не задевая продуктовых лидов.
-    if (item.areas?.length) return item.areas.some((a) => allowed.has(a));
-    return true; // области нет нигде — не режем
-  }
-  if (found.some((a) => allowed.has(a))) return true;
-  // но в скобках может стоять и уточнение специализации («Веб-дизайнер (UX/UI)»)
-  // — если своя область нашлась хоть где-то в заголовке, не режем
-  return areasOf(item.title).some((a) => allowed.has(a));
 }
 
 // Разовые/неполные форматы найма: агент ищет постоянную работу — консультации,
@@ -289,17 +179,7 @@ export function matchesItem(item, cfg) {
 // (телеграм матчит ключевые слова по полному тексту поста сам, но грейд,
 // область, формат и тип найма режутся по извлечённому заголовку здесь).
 export function structuralOk(item, cfg) {
-  return gradeOk(item, cfg.grades) && formatOk(item, cfg.formats)
-    && areaOk(item, cfg.directions) && gigOk(item) && designRoleOk(item);
-}
-
-// Смежные с дизайном, но НЕ дизайнерские профессии. Под ключевое слово «senior
-// ux» и область uxui подходит и «UX-редактор»/«UX-writer», но это контент/текст,
-// а не визуальный дизайн. Режем по явной профессии в заголовке — во всех
-// источниках (стоп-слова к prefiltered не применяются, а такие роли есть и там).
-const NON_DESIGN_RE = /редактор|редактур|\beditor|копирайтер|copywrit|райтер|\bwriter\b/i;
-function designRoleOk(item) {
-  return !NON_DESIGN_RE.test(item.title || "");
+  return gradeOk(item, cfg.grades) && formatOk(item, cfg.formats) && gigOk(item);
 }
 
 // --- Межисточниковый дедуп ---------------------------------------------------

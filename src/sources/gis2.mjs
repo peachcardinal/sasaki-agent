@@ -2,7 +2,7 @@
 const PAGE_URL = "https://job.2gis.ru/vacancies";
 
 export async function fetch2gis(cfg) {
-  const directions = cfg["2gis"]?.directions || ["design"];
+  const directions = cfg["2gis"]?.directions || [];
   const byId = new Map();
   for (const dir of directions) {
     const res = await fetch(`${PAGE_URL}?direction=${encodeURIComponent(dir)}`, {

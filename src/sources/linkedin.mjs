@@ -12,19 +12,14 @@ const API = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/sea
 const PAGE = 10;
 const MAX_PAGES = 4;
 
-// LinkedIn ищет ОДНОЙ фразой: оператор OR он не понимает (склейка вида
-// «design lead OR head of design» цеплялась за любое «head of» — приходили
-// медцентры и стройка), а кириллица в его индексе почти не работает. Поэтому
+// LinkedIn ищет одной фразой: оператор OR даёт широкие совпадения, а кириллица
+// в его индексе почти не работает. Поэтому
 // направления пульта переводим в короткие английские запросы и делаем по
-// запросу на направление. Проверено: «product designer» / Worldwide даёт
-// 40 из 40 релевантных, «дизайнер» / Russia — 0 из 10.
+// запросу на направление.
 const DIRECTION_QUERY = {
-  "продуктовый дизайн": "product designer",
-  "ux ui": "ux designer",
-  "web дизайн": "web designer",
-  "графический дизайн": "graphic designer",
-  "motion дизайн": "motion designer",
-  "иллюстрация": "illustrator",
+  "ml ai engineer": "machine learning engineer",
+  "computer vision engineer": "computer vision engineer",
+  "nlp llm engineer": "NLP engineer",
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/[/\-–—]+/g, " ").replace(/\s+/g, " ").trim();
 

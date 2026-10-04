@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { projectRoot } from "../lib/env.mjs";
-import { matchesKeywords, inferGrades, roleKeywords, areasOf, dutiesOf } from "../lib/filter.mjs";
+import { matchesKeywords, inferGrades, roleKeywords } from "../lib/filter.mjs";
 
 const cursorsPath = join(projectRoot, "data", "tg-cursors.json");
 
@@ -19,7 +19,7 @@ export async function fetchTelegramChannels(cfg) {
   const channels = all.filter((c) => !off.has(channelName(c)));
   if (channels.length === 0) return [];
   const cursors = loadCursors();
-  const kws = roleKeywords(cfg); // направления + ключевые слова, раскрытые (UX/UI → ux|ui)
+  const kws = roleKeywords(cfg); // направления + ключевые слова
   const out = [];
   const errors = [];
   // Докуда листать историю канала (по дате поста). Курсор обычно останавливает
@@ -36,12 +36,7 @@ export async function fetchTelegramChannels(cfg) {
         cursors[name] = Math.max(cursors[name] || 0, p.msgId);
         if (!matchesKeywords(p.text, kws)) continue;
         const company = companyFrom(p.text);
-        // область по полному тексту поста — запасной сигнал для направления,
-        // когда заголовок немой («Ведущий дизайнер»). Дайджесты (много ссылок =
-        // список разных вакансий) не размечаем: области взялись бы из чужих строк.
-        const areas = (p.urls?.length || 0) < 3 ? areasOf(dutiesOf(p.text)) : [];
         out.push({
-          ...(areas.length && { areas }),
           source: "telegram",
           id: `${name}:${p.msgId}`,
           title: stripCompanyFromTitle(jobTitle(p.text), company),
@@ -109,8 +104,7 @@ async function fetchChannel(name, sinceId, cutoffMs) {
 }
 
 function htmlToText(html) {
-  // NFKC разворачивает «дизайнерские» юникод-шрифты (математический жирный/
-  // курсив и пр.: 𝐃𝐞𝐬𝐢𝐠𝐧𝐞𝐫 → Designer) в обычные буквы — иначе парсер не
+  // NFKC разворачивает стилизованные юникод-шрифты в обычные буквы — иначе парсер не
   // распознаёт роль в заголовке и берёт строку описания.
   return decodeEntities(
     html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")
@@ -161,13 +155,11 @@ export function levelFrom(text) {
   return "";
 }
 
-// Слова-грейды (включая падежи) и роль-цель: грейд считается грейдом вакансии,
-// только когда стоит вплотную к дизайнерской роли — «старший разработчик»
-// в соседнем абзаце вакансию дизайнера не переоценит.
+// Слова-грейды и инженерные роли: соседнее упоминание другого грейда не влияет.
 const GRADE_T = "стаж[её]р\\w*|intern|trainee|джун\\w*|junior|младш\\w*|мидл\\w*|миддл\\w*|middle|старш\\w*|сеньор\\w*|синьор\\w*|senior|ведущ\\w*|лид(?:[ае]|ом)?(?![а-яё])|lead|тимлид\\w*|staff|стафф\\w*|главн\\w*|principal";
-const ROLE_T = "(?:(?:продуктов\\w+|графическ\\w+|коммуникационн\\w+|визуальн\\w+|веб|web|моушн\\w*|motion|ux|ui|ux\\/ui|ui\\/ux|product|graphic|digital|контент)[\\s/-]+){0,2}(?:дизайнер\\w*|designer\\w*)";
+const ROLE_T = "(?:(?:машинн\\w+|machine learning|computer vision|deep learning|искусственн\\w+ интеллект\\w*|ai|ml|nlp|llm)[\\s/-]+){0,2}(?:инженер\\w*|engineer\\w*|разработчик\\w*|developer\\w*|исследователь\\w*|scientist\\w*)";
 const GRADE_ROLE_RE = new RegExp(`(?:^|[^а-яёa-z])((?:${GRADE_T})(?:\\s*[+/,]\\s*(?:${GRADE_T}))*\\+?)[\\s/-]+${ROLE_T}`, "i");
-const ROLE_GRADE_RE = new RegExp(`(?:дизайнер\\w*|designer)[\\s,]+(?:уровня\\s+)?((?:${GRADE_T})\\+?(?:\\s*(?:[+/,]|или)\\s*(?:${GRADE_T})\\+?)*)`, "i");
+const ROLE_GRADE_RE = new RegExp(`(?:${ROLE_T})[\\s,]+(?:уровня\\s+)?((?:${GRADE_T})\\+?(?:\\s*(?:[+/,]|или)\\s*(?:${GRADE_T})\\+?)*)`, "i");
 
 function canonGrade(w) {
   for (const [re, g] of [
@@ -259,7 +251,7 @@ const META_LINE = /^(условия|локац|формат|зарплат|з\/?
 
 // Роль из винительного падежа в именительный: «коммуникационного дизайнера» →
 // «коммуникационный дизайнер». Правила грубые, но на фразах-ролях работают.
-const ROLE_NOUNS = "дизайнер|иллюстратор|аниматор|директор|менеджер|редактор|архитектор|визуализатор|моделлер|маркетолог|копирайтер|специалист|художник|разработчик|проектировщик|ретуш[её]р|исследовател|лид";
+const ROLE_NOUNS = "инженер|разработчик|исследовател|ученый|специалист|лид";
 function nominativeRole(s) {
   // конвертируем только «голову» фразы — до первого предлога-хвоста:
   // «… для телевизионного проекта», «… в команду X» должны остаться как есть
@@ -333,7 +325,7 @@ const SEEK_VERB = "(?:ищет|ищут|в\\s+поисках?|в\\s+поиске
 const NOT_COMPANY = /^(мы|нас|наш[аеи]?|вас|ваш[аеи]?|для|что|как|это|если|сейчас|снова|новый|молодой|котор\S*|друзья|ребята?|привет|команда|проект|стартап|компани\S*|вакансия|работ\S*|формат\S*|сайт|топ|кого|задач\S*|целевая|аудитори\S*|портфолио|промокод\S*|запишись|миллион\S*|пользовател\S*|локаци\S*|международн\S*|удал[её]н\S*|remote|hybrid|office|onsite|офис\S*|гибрид\S*|москва|спб|питер|продукт\S*|blender|figma|photoshop|cinema|unity|unreal|tilda|январ\S*|феврал\S*|март\S*|апрел\S*|ма[йя]|июн\S*|июл\S*|август\S*|сентябр\S*|октябр\S*|ноябр\S*|декабр\S*)$/i;
 // латиница — по границам слова, чтобы не задевать Emotions/Headspace и т.п.;
 // для кириллицы \b не работает — там подстроки
-const ROLE_WORD = /\b(designer|design|lead|senior|middle|junior|head|director|manager|graphic|product|motion|animator|ux|ui)\b|дизайн|директор|арт-|руководител|менеджер|специалист|художник|иллюстратор|аниматор|моушн/i;
+const ROLE_WORD = /\b(machine learning|computer vision|deep learning|engineer|developer|scientist|ml|ai|nlp|llm|lead|senior|middle|junior|head)\b|машинн\w* обучен|искусственн\w* интеллект|инженер|разработчик|исследовател|учен\w*|специалист|руководител|лид/i;
 
 function cleanCompany(raw) {
   const s = (raw || "")

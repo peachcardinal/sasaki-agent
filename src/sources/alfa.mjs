@@ -1,10 +1,10 @@
-// Альфа-Банк: открытый JSON API. businessLine 1011 = «Дизайн» (фильтр с их сайта).
+// Альфа-Банк: открытый JSON API. businessLine задаётся в локальной конфигурации.
 const API = "https://job.alfabank.ru/api/vacancies";
 const PAGE = 100;
 const MAX_PAGES = 5;
 
 export async function fetchAlfa(cfg) {
-  const lines = cfg.alfa?.businessLines || ["1011"];
+  const lines = cfg.alfa?.businessLines || [];
   const out = [];
   for (const line of lines) {
     for (let page = 0; page < MAX_PAGES; page++) {

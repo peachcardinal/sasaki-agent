@@ -31,7 +31,7 @@ export function hirehiQuery(cfg) {
 }
 
 export async function fetchHirehi(cfg) {
-  const categories = cfg.hirehi?.categories || ["design"];
+  const categories = cfg.hirehi?.categories || [];
   const { levels, formats } = hirehiQuery(cfg);
   const out = [];
   for (const cat of categories) {

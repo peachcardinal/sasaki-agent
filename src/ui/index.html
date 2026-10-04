@@ -683,7 +683,7 @@ function renderLevels() {
 }
 
 // --- направления (специализации) → добавляются в ключевые слова -------------
-const PRESETS = ["продуктовый дизайн", "UX/UI", "web-дизайн", "графический дизайн", "motion-дизайн", "иллюстрация"];
+const PRESETS = ["ML/AI Engineer", "Computer Vision Engineer", "NLP/LLM Engineer"];
 let dirs = new Set(); // отмеченные направления
 
 function renderPresets() {
@@ -735,7 +735,7 @@ $("onb-go").onclick = async () => {
 const HIDDEN_SOURCES = new Set(["telegram", "linkedin", "2gis"]);
 // Агрегаторы отделены от карьерных сайтов компаний; всё, чего нет в списке,
 // считается сайтом компании.
-const AGGREGATORS = new Set(["getmatch", "habr", "hirehi", "finder", "designer.ru", "hh", "linkedin", "careerspace", "geekjob"]);
+const AGGREGATORS = new Set(["getmatch", "habr", "hirehi", "finder", "ods", "hh", "linkedin", "careerspace", "geekjob"]);
 
 function renderSources() {
   const companies = $("src-companies"); companies.textContent = "";

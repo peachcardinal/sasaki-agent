@@ -16,16 +16,11 @@ const UA = "sasaki-agent/0.1 (+https://github.com/peachcardinal/sasaki-agent)";
 const PAUSE = 5000;
 const RETRIES = 2;
 
-// Направления пульта → запрос по названию вакансии. Проверено на живой выдаче;
-// «иллюстратор» hh расширяет до графического дизайна — не страшно, лишнее
-// отсечёт общий фильтр по ключевым словам.
+// ML-направления из пульта → запросы по названию вакансии.
 const DIRECTION_QUERY = {
-  "продуктовый дизайн": "продуктовый дизайнер",
-  "ux ui": "ux/ui дизайнер",
-  "web дизайн": "веб-дизайнер",
-  "графический дизайн": "графический дизайнер",
-  "motion дизайн": "моушн-дизайнер",
-  "иллюстрация": "иллюстратор",
+  "ml ai engineer": "machine learning engineer",
+  "computer vision engineer": "computer vision engineer",
+  "nlp llm engineer": "nlp engineer",
 };
 const norm = (s) => String(s || "").toLowerCase().replace(/[/\-–—]+/g, " ").replace(/\s+/g, " ").trim();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

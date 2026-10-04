@@ -9,7 +9,8 @@ const MAX_PAGES = 20;
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" };
 
 export async function fetchYandex(cfg) {
-  const professions = cfg.yandex?.professions || ["designer-uxui", "designer"];
+  const professions = cfg.yandex?.professions || [];
+  if (!professions.length) return [];
   const base = professions.map((p) => `professions=${encodeURIComponent(p)}`).join("&");
   const out = [];
   let cursor = null;

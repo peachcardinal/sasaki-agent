@@ -3,19 +3,12 @@
 // (запросы — в config.json → finder.queries); выдача по релевантности,
 // свежие титульные совпадения наверху. Центральный фильтр дорежет по title.
 //
-// У generic-заголовков («Ведущий дизайнер») области в названии нет, и такой
-// вакансией может оказаться кто угодно — хоть бренд-дизайнер салонов оптики.
-// Для них дотягиваем детальную страницу и определяем область по полному
-// описанию (item.areas) — центральный фильтр использует её как запасную.
-import { areasOf, dutiesOf, roleKeywords, matches } from "../lib/filter.mjs";
-
 const API = "https://api.finder.work/api/v1/vacancies/";
 const PAGE = 100;
 const MAX_PAGES = 2;
-const DETAIL_LIMIT = 8; // параллельность догрузки деталей
 
 export async function fetchFinder(cfg) {
-  const queries = cfg.finder?.queries || ["дизайнер"];
+  const queries = cfg.finder?.queries || ["machine learning engineer", "computer vision engineer", "NLP engineer"];
   const seen = new Set();
   const out = [];
   for (const q of queries) {
@@ -51,34 +44,7 @@ export async function fetchFinder(cfg) {
     }
   }
 
-  // Область из описания — только там, где заголовок её не назвал И вакансия
-  // вообще способна пройти фильтр по роли (иначе зря дёргать их API).
-  const kws = roleKeywords(cfg);
-  const need = out.filter(
-    (v) => !areasOf(v.title).length && matches(v.title, { keywords: kws, stopwords: [] })
-  );
-  await mapLimit(need, DETAIL_LIMIT, async (v) => {
-    try {
-      const res = await fetch(`${API}${v.id}/`, {
-        headers: { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" },
-      });
-      if (!res.ok) return;
-      const detail = await res.json();
-      const text = String(detail.description || "").replace(/<[^>]+>/g, " ");
-      const areas = areasOf(dutiesOf(text));
-      if (areas.length) v.areas = areas;
-    } catch { /* деталь недоступна — вакансия остаётся без areas, фильтр её не тронет */ }
-  });
-
   return out;
-}
-
-// Пул с ограничением параллелизма — чтобы не бомбить API десятками запросов разом.
-async function mapLimit(arr, limit, fn) {
-  let i = 0;
-  await Promise.all(Array.from({ length: Math.min(limit, arr.length) }, async () => {
-    while (i < arr.length) { const idx = i++; await fn(arr[idx]); }
-  }));
 }
 
 function fmtSalary(v) {

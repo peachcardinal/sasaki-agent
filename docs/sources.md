@@ -42,9 +42,7 @@ export default { name: "foo", fetch: fetchFoo };
 | Адаптер | Источник | Паттерн |
 |---|---|---|
 | hirehi.mjs | hirehi.ru | JSON API, фильтры level/format на стороне API |
-| designer.mjs | designer.ru | SSR-HTML (Bitrix), грейд с карточки вакансии |
 | finder.mjs | finder.vc | JSON API |
-| getmatch.mjs | getmatch.ru | JSON API |
 | habr.mjs | Хабр Карьера | SSR-HTML |
 | telegram.mjs | публичные каналы | веб-лента `t.me/s/`, без аккаунта и ключей |
 | linkedin.mjs | LinkedIn | гостевой эндпоинт job-постингов, без логина |
@@ -56,7 +54,7 @@ export default { name: "foo", fetch: fetchFoo };
 |---|---|---|
 | yandex.mjs | Яндекс | открытый JSON API, курсорная пагинация |
 | alfa.mjs | Альфа-Банк | открытый JSON API, take/skip |
-| tochka.mjs | Точка | JSON API (категорию не задаём — их таксономия без «design») |
+| tochka.mjs | Точка | JSON API (общая выдача, фильтр применяется локально) |
 | rwb.mjs | Wildberries | JSON API, фильтр direction_ids[] |
 | gis2.mjs | 2ГИС | JSON, вшитый в SSR-HTML |
 | avito.mjs | Авито | Bitrix AJAX (X-Requested-With) |

@@ -1,15 +1,12 @@
 // VK (team.vk.company): Next.js, вакансии вшиты в SSR-HTML как __NEXT_DATA__.
-// Фильтр — query-параметр specialty (273 = «Дизайн», полный список — в
-// props.pageProps.filters.specialities той же страницы). Дат публикации нет:
-// в списке поля даты отсутствуют, а на странице вакансии meta datePosted —
-// SEO-фейк (у ВСЕХ вакансий, включая годовалые id, всегда сегодняшняя дата;
-// проверено по всем текущим дизайн-вакансиям) — published остаётся пустым.
+// Фильтр — query-параметр specialty; поддерживаем только явно заданные
+// специализации, чтобы не тянуть старую дизайн-категорию.
 const BASE = "https://team.vk.company/vacancy/";
 const PAGE_SIZE = 25;
 const MAX_PAGES = 5;
 
 export async function fetchVk(cfg) {
-  const specialties = cfg.vk?.specialties || [273];
+  const specialties = cfg.vk?.specialties || [];
   const seen = new Set();
   const out = [];
   for (const sp of specialties) {

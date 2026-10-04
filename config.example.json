@@ -1,48 +1,162 @@
 {
   "onboarded": false,
   "keywords": [
-    "продуктовый дизайнер",
-    "дизайн лид"
+    "ml intern",
+    "ai intern",
+    "стажер ml",
+    "стажер машинного обучения",
+    "junior ml engineer",
+    "junior ai engineer",
+    "младший инженер машинного обучения",
+    "младший ml инженер",
+    "junior computer vision engineer",
+    "junior nlp engineer",
+    "middle ml engineer",
+    "middle ai engineer",
+    "ml engineer",
+    "machine learning engineer",
+    "инженер машинного обучения",
+    "ai engineer",
+    "computer vision engineer",
+    "nlp engineer",
+    "llm engineer",
+    "ML/AI Engineer",
+    "Computer Vision Engineer",
+    "NLP/LLM Engineer"
   ],
   "directions": [
-    "продуктовый дизайн"
+    "ML/AI Engineer",
+    "Computer Vision Engineer",
+    "NLP/LLM Engineer"
   ],
-  "stopwords": [
-    "стажер",
-    "junior"
+  "stopwords": [],
+  "grades": [
+    "intern",
+    "junior",
+    "middle"
   ],
-  "grades": [],
   "formats": [],
   "retentionDays": 30,
   "sources": {
-    "getmatch": true,
-    "habr": true,
-    "hirehi": true,
-    "designer.ru": true,
     "finder": true,
-    "telegram": true,
+    "habr": true,
     "linkedin": true,
+    "ods": true,
     "hh": true,
-    "alfa": true,
-    "avito": true,
-    "2gis": true,
+    "alfa": false,
+    "avito": false,
+    "2gis": false,
+    "hirehi": false,
     "magnit": true,
     "mts": true,
-    "rwb": true,
-    "tbank": true,
+    "rwb": false,
+    "tbank": false,
     "tochka": true,
-    "vk": true,
+    "vk": false,
     "x5": true,
-    "yandex": true
+    "yandex": false,
+    "telegram": false
   },
   "delivery": {
-    "channels": ["markdown"],
-    "markdown": { "dir": "out" },
-    "csv": { "file": "out/vacancies.csv" },
-    "webhook": { "url": "", "format": "slack" }
+    "channels": [
+      "markdown"
+    ],
+    "markdown": {
+      "dir": "out"
+    },
+    "csv": {
+      "file": "out/vacancies.csv"
+    },
+    "webhook": {
+      "url": "",
+      "format": "slack"
+    }
   },
+  "levels": [
+    {
+      "name": "intern",
+      "on": true,
+      "keywords": [
+        "ml intern",
+        "ai intern",
+        "стажер ml",
+        "стажер машинного обучения"
+      ]
+    },
+    {
+      "name": "junior",
+      "on": true,
+      "keywords": [
+        "junior ml engineer",
+        "junior ai engineer",
+        "младший инженер машинного обучения",
+        "младший ml инженер",
+        "junior computer vision engineer",
+        "junior nlp engineer"
+      ]
+    },
+    {
+      "name": "middle",
+      "on": true,
+      "keywords": [
+        "middle ml engineer",
+        "middle ai engineer",
+        "ml engineer",
+        "machine learning engineer",
+        "инженер машинного обучения",
+        "ai engineer",
+        "computer vision engineer",
+        "nlp engineer",
+        "llm engineer"
+      ]
+    },
+    {
+      "name": "senior",
+      "on": false,
+      "keywords": [
+        "senior ml engineer",
+        "senior ai engineer",
+        "senior computer vision engineer",
+        "senior nlp engineer"
+      ]
+    },
+    {
+      "name": "lead",
+      "on": false,
+      "keywords": [
+        "ml lead",
+        "ai lead",
+        "lead machine learning engineer",
+        "руководитель машинного обучения"
+      ]
+    },
+    {
+      "name": "head",
+      "on": false,
+      "keywords": [
+        "head of machine learning",
+        "head of ai",
+        "директор по искусственному интеллекту"
+      ]
+    }
+  ],
   "telegram": {
-    "channels": ["@designhunters", "@designoffers"],
+    "channels": [],
     "disabled": []
+  },
+  "mts": {
+    "queries": [
+      "machine learning",
+      "AI engineer",
+      "computer vision",
+      "NLP"
+    ]
+  },
+  "finder": {
+    "queries": [
+      "machine learning engineer",
+      "computer vision engineer",
+      "NLP engineer"
+    ]
   }
 }

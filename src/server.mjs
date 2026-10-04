@@ -55,12 +55,12 @@ const GRADE_TO_LEVEL = {
   lead: "lead", staff: "senior", principal: "head", head: "head", director: "head",
 };
 const LEVEL_DEFAULT_KEYWORDS = {
-  intern: ["стажер дизайнер", "стажер ux", "стажер ui", "дизайн стажировка", "design intern"],
-  junior: ["джуниор дизайнер", "младший дизайнер", "начинающий дизайнер", "junior ux", "junior ui", "junior designer"],
-  middle: ["мидл дизайнер", "middle ux", "middle ui", "middle designer", "middle product designer"],
-  senior: ["старший дизайнер", "senior ux", "senior ui", "senior designer", "senior product designer"],
-  lead: ["дизайн лид", "лид дизайнер", "ведущий дизайнер", "главный дизайнер", "lead ux", "design lead", "lead product designer"],
-  head: ["руководитель дизайна", "дизайн директор", "head of design", "design director", "арт-директор"],
+  intern: ["ml intern", "ai intern", "стажер ml", "стажер машинного обучения"],
+  junior: ["junior ml engineer", "junior ai engineer", "младший инженер машинного обучения", "младший ml инженер", "junior computer vision engineer", "junior nlp engineer"],
+  middle: ["middle ml engineer", "middle ai engineer", "ml engineer", "machine learning engineer", "инженер машинного обучения", "ai engineer", "computer vision engineer", "nlp engineer", "llm engineer"],
+  senior: ["senior ml engineer", "senior ai engineer", "senior computer vision engineer", "senior nlp engineer"],
+  lead: ["ml lead", "ai lead", "lead machine learning engineer", "руководитель машинного обучения"],
+  head: ["head of machine learning", "head of ai", "директор по искусственному интеллекту"],
 };
 
 function levelsFor(cfg) {

@@ -11,7 +11,8 @@ const GRADE_TAGS = new Set(["junior", "middle", "senior", "lead", "head"]);
 
 export async function fetchTbank(cfg) {
   const category = cfg.tbank?.category || "it";
-  const professions = cfg.tbank?.professions || ["design"];
+  const professions = cfg.tbank?.professions || [];
+  if (!professions.length) return [];
   const out = [];
   let offset = 0;
   for (let page = 0; page < MAX_PAGES; page++) {

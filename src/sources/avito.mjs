@@ -8,7 +8,7 @@ const API = "https://career.avito.com/vacancies/";
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh) sasaki-agent/0.1" };
 
 export async function fetchAvito(cfg) {
-  const directions = cfg.avito?.directions || ["dizayn"];
+  const directions = cfg.avito?.directions || [];
   const byId = new Map();
   for (const dir of directions) {
     const res = await fetch(`${API}?q=&action=filter&direction=${encodeURIComponent(dir)}`, {
